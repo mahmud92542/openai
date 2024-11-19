@@ -25,31 +25,11 @@ jobs:
           )
           EXISTING_CONFIG=$(curl -s "${HEADERS[@]}" "$API_URL")
 
-      - name: Load New Configuration
-        run: |
-          CONFIG_FILE="assistant_config.json"
-
-          if [ ! -f "$CONFIG_FILE" ]; then
-            echo "Configuration file not found!"
-            exit 1
-          fi
-
       - name: Validate JSON format
         run: |
           if ! jq empty "$CONFIG_FILE"; then
             echo "Invalid JSON format in $CONFIG_FILE"
             exit 1
-          fi
-
-      - name: Compare Configurations (Optional)  # Updated logic
-        if: steps.get-existing-config.outputs  # Only run if previous step succeeded
-        run: |
-          # Check for significant changes (consider using a diff tool)
-          if [[ "$(jq . <<< "$EXISTING_CONFIG")" != "$(jq . "$CONFIG_FILE")" ]]; then
-            echo "Significant configuration changes detected. Proceeding with update."
-          else
-            echo "No significant configuration changes detected. Skipping update."
-            exit 0
           fi
 
       - name: Set API endpoint and headers
