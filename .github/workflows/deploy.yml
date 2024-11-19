@@ -1,4 +1,4 @@
-name: Update Assistant to OpenAI
+name: Deploy Assistant to OpenAI
 
 on:
   push:
@@ -6,49 +6,65 @@ on:
       - assistant_config.json
 
 jobs:
-  update-assistant:
+  deploy-assistant:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Update Assistant on OpenAI
+      - name: Deploy Assistant to OpenAI
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
+          # Load the JSON file
           CONFIG_FILE="assistant_config.json"
-
-          # Check if the config file exists
+          
           if [ ! -f "$CONFIG_FILE" ]; then
             echo "Configuration file not found!"
             exit 1
           fi
 
-          # Validate the JSON format
+          # Validate JSON format
           if ! jq empty "$CONFIG_FILE"; then
             echo "Invalid JSON format in $CONFIG_FILE"
             exit 1
           fi
 
-          # Remove 'id' field from the JSON to avoid errors
-          jq 'del(.id)' "$CONFIG_FILE" > temp_config.json
+          # Extract the assistant ID (if exists)
+          ASSISTANT_ID=$(jq -r '.id // empty' "$CONFIG_FILE")
 
-          # POST request to update the assistant
-          echo "Updating the assistant..."
-          curl -s -X POST "https://api.openai.com/v1/assistants" \
-            -H "Authorization: Bearer $OPENAI_API_KEY" \
-            -H "Content-Type: application/json" \
-            -H "OpenAI-Beta: assistants=v2" \
-            -d @temp_config.json \
-            -o update_response.json
+          # Set API endpoint and headers
+          API_URL="https://api.openai.com/v1/assistants"
+          HEADERS=(
+            -H "Authorization: Bearer $OPENAI_API_KEY"
+            -H "Content-Type: application/json"
+            -H "OpenAI-Beta: assistants=v2"
+          )
 
-          # Check if there was an error during the request
-          if jq '.error' update_response.json > /dev/null; then
-            echo "Error during update:"
-            cat update_response.json
-            exit 1
+          # Decide between CREATE (POST) or UPDATE (PATCH)
+          if [ -n "$ASSISTANT_ID" ]; then
+            echo "Updating assistant with ID: $ASSISTANT_ID"
+            API_URL="$API_URL/$ASSISTANT_ID"
+            METHOD="PATCH"
+
+            # Remove fields not allowed in updates (like 'id')
+            jq 'del(.id)' "$CONFIG_FILE" > temp_config.json
+            CONFIG_FILE="temp_config.json"
           else
-            echo "Assistant updated successfully!"
-            cat update_response.json
+            echo "Creating a new assistant"
+            METHOD="POST"
+          fi
+
+          # Deploy the assistant using cURL
+          RESPONSE=$(curl -s -o response.json -w "%{http_code}" "${HEADERS[@]}" -X $METHOD -d @"$CONFIG_FILE" "$API_URL")
+
+          # Check response status
+          if [ "$RESPONSE" -eq 200 ] || [ "$RESPONSE" -eq 201 ]; then
+            echo "Assistant successfully deployed!"
+            cat response.json
+          else
+            echo "Failed to deploy assistant. HTTP Status: $RESPONSE"
+            cat response.json
+            exit 1
           fi
