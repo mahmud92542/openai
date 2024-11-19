@@ -31,40 +31,63 @@ jobs:
             exit 1
           fi
 
-          # Extract the assistant ID (if exists)
+          # Extract the assistant ID
           ASSISTANT_ID=$(jq -r '.id // empty' "$CONFIG_FILE")
 
-          # Set API endpoint and headers
-          API_URL="https://api.openai.com/v1/assistants"
+          # Set API headers
           HEADERS=(
             -H "Authorization: Bearer $OPENAI_API_KEY"
             -H "Content-Type: application/json"
             -H "OpenAI-Beta: assistants=v2"
           )
 
-          # Decide between CREATE (POST) or UPDATE (PATCH)
+          # Clone and Update Workflow
           if [ -n "$ASSISTANT_ID" ]; then
             echo "Updating assistant with ID: $ASSISTANT_ID"
-            API_URL="$API_URL/$ASSISTANT_ID"
-            METHOD="PATCH"
 
-            # Remove fields not allowed in updates (like 'id')
+            # Step 1: Clone the existing assistant
+            CLONE_URL="https://api.openai.com/v1/assistants/$ASSISTANT_ID/clone"
+            CLONE_RESPONSE=$(curl -s -o clone_response.json -w "%{http_code}" "${HEADERS[@]}" -X POST "$CLONE_URL")
+
+            if [ "$CLONE_RESPONSE" -ne 201 ]; then
+              echo "Failed to clone the assistant. HTTP Status: $CLONE_RESPONSE"
+              cat clone_response.json
+              exit 1
+            fi
+
+            # Extract the ID of the cloned assistant
+            NEW_ASSISTANT_ID=$(jq -r '.id' clone_response.json)
+            echo "Cloned assistant created with ID: $NEW_ASSISTANT_ID"
+
+            # Step 2: Update the cloned assistant
             jq 'del(.id)' "$CONFIG_FILE" > temp_config.json
-            CONFIG_FILE="temp_config.json"
+            UPDATE_URL="https://api.openai.com/v1/assistants/$NEW_ASSISTANT_ID"
+            UPDATE_RESPONSE=$(curl -s -o update_response.json -w "%{http_code}" "${HEADERS[@]}" -X PATCH -d @temp_config.json "$UPDATE_URL")
+
+            if [ "$UPDATE_RESPONSE" -ne 200 ]; then
+              echo "Failed to update the cloned assistant. HTTP Status: $UPDATE_RESPONSE"
+              cat update_response.json
+              exit 1
+            fi
+
+            echo "Cloned assistant successfully updated!"
+            cat update_response.json
+
+            # Optional Step 3: Clean up or replace original assistant
+            # Uncomment if you want to delete the original assistant
+            # DELETE_URL="https://api.openai.com/v1/assistants/$ASSISTANT_ID"
+            # curl -s -X DELETE "${HEADERS[@]}" "$DELETE_URL"
           else
             echo "Creating a new assistant"
-            METHOD="POST"
-          fi
+            CREATE_URL="https://api.openai.com/v1/assistants"
+            CREATE_RESPONSE=$(curl -s -o create_response.json -w "%{http_code}" "${HEADERS[@]}" -X POST -d @"$CONFIG_FILE" "${HEADERS[@]}")
 
-          # Deploy the assistant using cURL
-          RESPONSE=$(curl -s -o response.json -w "%{http_code}" "${HEADERS[@]}" -X $METHOD -d @"$CONFIG_FILE" "$API_URL")
-
-          # Check response status
-          if [ "$RESPONSE" -eq 200 ] || [ "$RESPONSE" -eq 201 ]; then
-            echo "Assistant successfully deployed!"
-            cat response.json
-          else
-            echo "Failed to deploy assistant. HTTP Status: $RESPONSE"
-            cat response.json
-            exit 1
+            if [ "$CREATE_RESPONSE" -eq 201 ]; then
+              echo "New assistant successfully created!"
+              cat create_response.json
+            else
+              echo "Failed to create assistant. HTTP Status: $CREATE_RESPONSE"
+              cat create_response.json
+              exit 1
+            fi
           fi
