@@ -13,7 +13,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Validate Configuration JSON
+      - name: Load Configuration
         run: |
           CONFIG_FILE="assistant_config.json"
 
@@ -22,83 +22,49 @@ jobs:
             exit 1
           fi
 
+          # Validate JSON format
           if ! jq empty "$CONFIG_FILE"; then
             echo "Invalid JSON format in $CONFIG_FILE"
             exit 1
           fi
 
-      - name: Extract Assistant ID (if exists)
-        id: extract-id
-        run: |
-          CONFIG_FILE="assistant_config.json"
+          # Extract assistant ID
           ASSISTANT_ID=$(jq -r '.id // empty' "$CONFIG_FILE")
-          echo "Assistant ID: $ASSISTANT_ID"
-          echo "::set-output name=id::$ASSISTANT_ID"
-
-      - name: Fetch Existing Assistant Configuration (if ID exists)
-        id: fetch-existing
-        if: steps.extract-id.outputs.id != ''
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: |
-          API_URL="https://api.openai.com/v1/assistants/${{ steps.extract-id.outputs.id }}"
-          HEADERS=(
-            -H "Authorization: Bearer $OPENAI_API_KEY"
-            -H "Content-Type: application/json"
-            -H "OpenAI-Beta: assistants=v2"
-          )
-          RESPONSE=$(curl -s "${HEADERS[@]}" "$API_URL")
-          echo "$RESPONSE" > existing_config.json
-          echo "::set-output name=config::$RESPONSE"
-
-      - name: Compare Configurations (if ID exists)
-        if: steps.fetch-existing.outputs.config != ''
-        run: |
-          CONFIG_FILE="assistant_config.json"
-          EXISTING_CONFIG="existing_config.json"
-
-          # Use jq to compare JSON structures directly
-          if ! jq -c '. == .' <(jq . "$CONFIG_FILE") <(jq . "$EXISTING_CONFIG"); then
-            echo "Configuration changes detected. Proceeding with update."
-          else
-            echo "No significant changes detected. Skipping update."
-            exit 0
+          if [ -z "$ASSISTANT_ID" ]; then
+            echo "Assistant ID not found in $CONFIG_FILE. Exiting."
+            exit 1
           fi
+          echo "Assistant ID: $ASSISTANT_ID" >> $GITHUB_ENV
 
-      - name: Deploy Assistant to OpenAI
+      - name: Update Assistant on OpenAI
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           CONFIG_FILE="assistant_config.json"
-          ASSISTANT_ID="${{ steps.extract-id.outputs.id }}"
+          API_URL="https://api.openai.com/v1/assistants/$ASSISTANT_ID"
 
-          # Set API endpoint and HTTP method
-          if [ -n "$ASSISTANT_ID" ]; then
-            echo "Updating assistant with ID: $ASSISTANT_ID"
-            API_URL="https://api.openai.com/v1/assistants/$ASSISTANT_ID"
-            METHOD="PUT"
-            jq 'del(.id)' "$CONFIG_FILE" > temp_config.json  # Remove existing ID for update
-            CONFIG_FILE="temp_config.json"
-          else
-            echo "Creating a new assistant"
-            API_URL="https://api.openai.com/v1/assistants"
-            METHOD="POST"
-          fi
+          # Extract relevant fields for update
+          jq '{instructions, tools, model}' "$CONFIG_FILE" > temp_config.json
 
-          # Deploy using cURL
-          HEADERS=(
-            -H "Authorization: Bearer $OPENAI_API_KEY"
-            -H "Content-Type: application/json"
-            -H "OpenAI-Beta: assistants=v2"
-          )
-          RESPONSE=$(curl -s -o response.json -w "%{http_code}" "${HEADERS[@]}" -X $METHOD -d @"$CONFIG_FILE" "$API_URL")
+          # Debugging: Display payload
+          echo "Payload being sent:"
+          cat temp_config.json
+
+          # Execute cURL command
+          RESPONSE=$(curl -s -o response.json -w "%{http_code}" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $OPENAI_API_KEY" \
+            -H "OpenAI-Beta: assistants=v2" \
+            -d @temp_config.json \
+            "$API_URL")
 
           # Check response status
-          if [ "$RESPONSE" -eq 200 ] || [ "$RESPONSE" -eq 201 ]; then
-            echo "Assistant successfully deployed!"
+          if [ "$RESPONSE" -eq 200 ]; then
+            echo "Assistant successfully updated!"
             cat response.json
           else
-            echo "Failed to deploy assistant. HTTP Status: $RESPONSE"
+            echo "Failed to update assistant. HTTP Status: $RESPONSE"
             cat response.json
             exit 1
           fi
