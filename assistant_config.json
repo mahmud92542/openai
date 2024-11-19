@@ -1,7 +1,4 @@
 {
-  "id": "asst_W0DyuoPwuUmefimCcDb31ANM",
-  "object": "assistant",
-  "created_at": 1730877596,
   "name": "mahmud's_assistant",
   "description": "This is my assistant",
   "model": "gpt-4o",
