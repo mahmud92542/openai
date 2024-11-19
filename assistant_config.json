@@ -2,7 +2,7 @@
   "name": "mahmud's_assistant",
   "description": "This is my assistant",
   "model": "gpt-4o",
-  "instructions": "Provide an overview of the specified technical topics. Hello AI Team! Wassup!)",
+  "instructions": "Provide an overview of the specified technical topics. Hello AI Team! Wassup Opti Fam!)",
   "tools": [],
   "top_p": 1.0,
   "temperature": 1.0,
