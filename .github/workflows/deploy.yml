@@ -13,56 +13,48 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Get Existing Assistant Configuration (Optional)
+      - name: Deploy Assistant to OpenAI
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          API_URL="https://api.openai.com/v1/assistants/$ASSISTANT_ID"  # Replace with your assistant ID (if known)
-          HEADERS=(
-            -H "Authorization: Bearer $OPENAI_API_KEY"
-            -H "Content-Type: application/json"
-            -H "OpenAI-Beta: assistants=v2"
-          )
-          EXISTING_CONFIG=$(curl -s "${HEADERS[@]}" "$API_URL")
-
-      - name: Load New Configuration
-        run: |
+          # Load the JSON file
           CONFIG_FILE="assistant_config.json"
-
+          
           if [ ! -f "$CONFIG_FILE" ]; then
             echo "Configuration file not found!"
             exit 1
           fi
 
-      - name: Validate JSON format
-        run: |
+          # Validate JSON format
           if ! jq empty "$CONFIG_FILE"; then
             echo "Invalid JSON format in $CONFIG_FILE"
             exit 1
           fi
 
-      - name: Compare Configurations (Optional)  # Updated logic
-        if: steps.get-existing-config.outputs  # Only run if previous step succeeded
-        run: |
-          # Check for significant changes (consider using a diff tool)
-          if [[ "$(jq . <<< "$EXISTING_CONFIG")" != "$(jq . "$CONFIG_FILE")" ]]; then
-            echo "Significant configuration changes detected. Proceeding with update."
-          else
-            echo "No significant configuration changes detected. Skipping update."
-            exit 0
-          fi
-
-      - name: Extract Assistant ID (if exists)
-        run: |
+          # Extract the assistant ID (if exists)
           ASSISTANT_ID=$(jq -r '.id // empty' "$CONFIG_FILE")
 
-      - name: Set API endpoint and headers
-        run: |
-          API_URL="https://api.openai.com/v1/assistants/$ASSISTANT_ID"  # Use existing ID if found
+          # Set API endpoint and headers
+          API_URL="https://api.openai.com/v1/assistants"
           HEADERS=(
             -H "Authorization: Bearer $OPENAI_API_KEY"
             -H "Content-Type: application/json"
             -H "OpenAI-Beta: assistants=v2"
+          )
+
+          # Decide between CREATE (POST) or UPDATE (PATCH)
+          if [ -n "$ASSISTANT_ID" ]; then
+            echo "Updating assistant with ID: $ASSISTANT_ID"
+            API_URL="$API_URL/$ASSISTANT_ID"
+            METHOD="PATCH"
+
+            # Remove fields not allowed in updates (like 'id')
+            jq 'del(.id)' "$CONFIG_FILE" > temp_config.json
+            CONFIG_FILE="temp_config.json"
+          else
+            echo "Creating a new assistant"
+            METHOD="POST"
+          fi
           )
 
       - name: Update the assistant using cURL (modify endpoint)
