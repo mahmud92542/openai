@@ -1,4 +1,4 @@
-name: Deploy Assistant to OpenAI
+name: Update Assistant to OpenAI
 
 on:
   push:
@@ -6,65 +6,53 @@ on:
       - assistant_config.json
 
 jobs:
-  deploy-assistant:
+  update-assistant:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Deploy Assistant to OpenAI
+      - name: Update Assistant on OpenAI
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ASSISTANT_ID: ${{ secrets.ASSISTANT_ID }}
         run: |
-          # Load the JSON file
-          CONFIG_FILE="assistant_config.json"
-          
-          if [ ! -f "$CONFIG_FILE" ]; then
-            echo "Configuration file not found!"
+          # Check if ASSISTANT_ID is set
+          if [ -z "$ASSISTANT_ID" ]; then
+            echo "Error: ASSISTANT_ID is not set in GitHub Secrets."
             exit 1
           fi
 
-          # Validate JSON format
+          # Validate JSON file
+          CONFIG_FILE="assistant_config.json"
+          if [ ! -f "$CONFIG_FILE" ]; then
+            echo "Configuration file not found: $CONFIG_FILE"
+            exit 1
+          fi
           if ! jq empty "$CONFIG_FILE"; then
             echo "Invalid JSON format in $CONFIG_FILE"
             exit 1
           fi
 
-          # Extract the assistant ID (if exists)
-          ASSISTANT_ID=$(jq -r '.id // empty' "$CONFIG_FILE")
+          # Remove 'id' field from JSON to avoid conflicts during PATCH
+          jq 'del(.id)' "$CONFIG_FILE" > temp_config.json
 
-          # Set API endpoint and headers
-          API_URL="https://api.openai.com/v1/assistants"
-          HEADERS=(
-            -H "Authorization: Bearer $OPENAI_API_KEY"
-            -H "Content-Type: application/json"
-            -H "OpenAI-Beta: assistants=v2"
-          )
+          # Update the assistant
+          echo "Updating the assistant with ID: $ASSISTANT_ID"
+          curl -s -X PATCH "https://api.openai.com/v1/assistants/$ASSISTANT_ID" \
+            -H "Authorization: Bearer $OPENAI_API_KEY" \
+            -H "Content-Type: application/json" \
+            -H "OpenAI-Beta: assistants=v2" \
+            -d @temp_config.json \
+            -o update_response.json
 
-          # Decide between CREATE (POST) or UPDATE (PATCH)
-          if [ -n "$ASSISTANT_ID" ]; then
-            echo "Updating assistant with ID: $ASSISTANT_ID"
-            API_URL="$API_URL/$ASSISTANT_ID"
-            METHOD="PATCH"
-
-            # Remove fields not allowed in updates (like 'id')
-            jq 'del(.id)' "$CONFIG_FILE" > temp_config.json
-            CONFIG_FILE="temp_config.json"
-          else
-            echo "Creating a new assistant"
-            METHOD="POST"
-          fi
-
-          # Deploy the assistant using cURL
-          RESPONSE=$(curl -s -o response.json -w "%{http_code}" "${HEADERS[@]}" -X $METHOD -d @"$CONFIG_FILE" "$API_URL")
-
-          # Check response status
-          if [ "$RESPONSE" -eq 200 ] || [ "$RESPONSE" -eq 201 ]; then
-            echo "Assistant successfully deployed!"
-            cat response.json
-          else
-            echo "Failed to deploy assistant. HTTP Status: $RESPONSE"
-            cat response.json
+          # Check response
+          if jq '.error' update_response.json > /dev/null; then
+            echo "Error during update:"
+            cat update_response.json
             exit 1
+          else
+            echo "Assistant updated successfully!"
+            cat update_response.json
           fi
