@@ -1,0 +1,15 @@
+{
+  "id": "asst_W0DyuoPwuUmefimCcDb31ANM",
+  "object": "assistant",
+  "created_at": 1730877596,
+  "name": "mahmud's_assistant",
+  "description": "This is my assistant",
+  "model": "gpt-4o",
+  "instructions": "Provide an overview of the specified technical topics. Hello Assistant!)",
+  "tools": [],
+  "top_p": 1.0,
+  "temperature": 1.0,
+  "tool_resources": {},
+  "metadata": {},
+  "response_format": "auto"
+}
