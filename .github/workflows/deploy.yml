@@ -13,7 +13,8 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Load Configuration
+      - name: Extract Assistant ID
+        id: extract-id
         run: |
           CONFIG_FILE="assistant_config.json"
 
@@ -34,13 +35,15 @@ jobs:
             echo "Assistant ID not found in $CONFIG_FILE. Exiting."
             exit 1
           fi
-          echo "Assistant ID: $ASSISTANT_ID" >> $GITHUB_ENV
+
+          echo "::set-output name=assistant_id::$ASSISTANT_ID" # Pass it as a GitHub Actions output
 
       - name: Update Assistant on OpenAI
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           CONFIG_FILE="assistant_config.json"
+          ASSISTANT_ID="${{ steps.extract-id.outputs.assistant_id }}"
           API_URL="https://api.openai.com/v1/assistants/$ASSISTANT_ID"
 
           # Extract relevant fields for update
