@@ -55,21 +55,16 @@ jobs:
             echo "Creating a new assistant"
             METHOD="POST"
           fi
-          )
 
-      - name: Update the assistant using cURL (modify endpoint)
-        run: |
-          # Only send the fields you want to update
-          MODIFIED_CONFIG=$(jq -r '.{name, instructions, ...}' "$CONFIG_FILE")  # Adjust selection as needed
-          METHOD="POST"
-          RESPONSE=$(curl -s -o response.json -w "%{http_code}" "${HEADERS[@]}" -X $METHOD -d "$MODIFIED_CONFIG" "$API_URL")
+          # Deploy the assistant using cURL
+          RESPONSE=$(curl -s -o response.json -w "%{http_code}" "${HEADERS[@]}" -X $METHOD -d @"$CONFIG_FILE" "$API_URL")
 
           # Check response status
-          if [ "$RESPONSE" -eq 200 ]; then
-            echo "Assistant successfully updated!"
+          if [ "$RESPONSE" -eq 200 ] || [ "$RESPONSE" -eq 201 ]; then
+            echo "Assistant successfully deployed!"
             cat response.json
           else
-            echo "Failed to update assistant. HTTP Status: $RESPONSE"
+            echo "Failed to deploy assistant. HTTP Status: $RESPONSE"
             cat response.json
             exit 1
           fi
