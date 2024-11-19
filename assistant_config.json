@@ -2,7 +2,7 @@
   "name": "mahmud's_assistant",
   "description": "This is my assistant",
   "model": "gpt-4o",
-  "instructions": "Provide an overview of the specified technical topics. Testing CI/CD & automation!",
+  "instructions": "Provide an overview of the specified technical topics. Testing CI/CD!",
   "tools": [],
   "top_p": 1.0,
   "temperature": 1.0,
