@@ -42,11 +42,15 @@ jobs:
             -H "OpenAI-Beta: assistants=v2"
           )
 
-          # Decide between CREATE (POST) or UPDATE (PUT)
+          # Decide between CREATE (POST) or UPDATE (PATCH)
           if [ -n "$ASSISTANT_ID" ]; then
             echo "Updating assistant with ID: $ASSISTANT_ID"
             API_URL="$API_URL/$ASSISTANT_ID"
-            METHOD="PUT"
+            METHOD="PATCH"
+
+            # Remove fields not allowed in updates (like 'id')
+            jq 'del(.id)' "$CONFIG_FILE" > temp_config.json
+            CONFIG_FILE="temp_config.json"
           else
             echo "Creating a new assistant"
             METHOD="POST"
