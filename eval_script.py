@@ -50,7 +50,14 @@ def evaluate_tests(test_cases):
         
         results.append((test['id'], test_result))  # Collect test result (id, result)
 
-    return results  # Return the list of results
+    # Calculate the percentage of passing tests
+    total_tests = len(results)
+    pass_count = sum(1 for _, result in results if result == "PASS")
+    pass_percentage = (pass_count / total_tests) * 100
+
+    print(f"Pass percentage: {pass_percentage}%")
+
+    return results, pass_percentage  # Return the list of results and pass percentage
 
 if __name__ == "__main__":
     # Set OpenAI API key from environment variable
@@ -63,9 +70,17 @@ if __name__ == "__main__":
     test_cases = load_test_cases("test_cases.json")
 
     # Evaluate test cases
-    results = evaluate_tests(test_cases)
+    results, pass_percentage = evaluate_tests(test_cases)
 
     # Output results (for visual feedback)
     print("Test Results:")
     for test_id, result in results:
         print(f"Test {test_id}: {result}")
+
+    # Proceed with deployment if 80% or more tests pass
+    if pass_percentage >= 80:
+        print("Deployment can proceed!")
+        # Add your deployment code here
+    else:
+        print("Not enough tests passed for deployment.")
+        exit(1)
