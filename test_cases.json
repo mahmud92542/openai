@@ -3,13 +3,13 @@
         "id": "TC-001",
         "input": "What is the capital of France?",
         "expected_output": "Paris",
-        "comparison_method": "partial"
+        "comparison_method": "exact_match"
     },
     {
         "id": "TC-002",
         "input": "Who wrote Pride and Prejudice?",
         "expected_output": "Jane Austen",
-        "comparison_method": "partial"
+        "comparison_method": "exact_match"
     },
     {
         "id": "TC-003",
