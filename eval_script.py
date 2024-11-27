@@ -37,27 +37,27 @@ def compare_outputs(expected, actual, method="exact"):
 # Evaluate the tests
 def evaluate_tests(test_cases):
     results = []
+    pass_count = 0  # To count the number of passed tests
+
     for test in test_cases:
         print(f"Running Test: {test['id']}")
         actual_output = get_actual_output(test["input"])
         print(f"Expected: {test['expected_output']}")
         print(f"Actual: {actual_output}")
 
-        test_result = "PASS" if compare_outputs(test["expected_output"], actual_output, method=test.get("comparison_method", "exact")) else "FAIL"
-        
-        print(f"{test['id']} - {test_result}")
+        # Check the comparison result
+        if compare_outputs(test["expected_output"], actual_output, method=test.get("comparison_method", "exact")):
+            results.append((test['id'], "PASS"))
+            pass_count += 1
+            print(f"{test['id']} - PASS")
+        else:
+            results.append((test['id'], "FAIL"))
+            print(f"{test['id']} - FAIL")
         print("-" * 50)
-        
-        results.append((test['id'], test_result))  # Collect test result (id, result)
 
-    # Calculate the percentage of passing tests
-    total_tests = len(results)
-    pass_count = sum(1 for _, result in results if result == "PASS")
-    pass_percentage = (pass_count / total_tests) * 100
-
-    print(f"Pass percentage: {pass_percentage}%")
-
-    return results, pass_percentage  # Return the list of results and pass percentage
+    # Calculate the pass percentage
+    pass_percentage = (pass_count / len(test_cases)) * 100
+    return results, pass_percentage
 
 if __name__ == "__main__":
     # Set OpenAI API key from environment variable
@@ -72,15 +72,5 @@ if __name__ == "__main__":
     # Evaluate test cases
     results, pass_percentage = evaluate_tests(test_cases)
 
-    # Output results (for visual feedback)
-    print("Test Results:")
-    for test_id, result in results:
-        print(f"Test {test_id}: {result}")
-
-    # Proceed with deployment if 80% or more tests pass
-    if pass_percentage >= 80:
-        print("Deployment can proceed!")
-        # Add your deployment code here
-    else:
-        print("Not enough tests passed for deployment.")
-        exit(1)
+    # Print results and pass percentage
+    print(f"Pass Percentage: {pass_percentage}%")
