@@ -16,8 +16,8 @@ jobs:
       - name: List Files after Checkout
         run: |
           echo "Listing files after checkout:"
-          ls -alt /home/runner/work/${{ github.repository }}  # Shows files in the repo root
-
+          ls -alt
+          
       - name: Extract Assistant ID
         id: extract-id
         run: |
