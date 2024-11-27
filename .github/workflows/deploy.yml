@@ -24,8 +24,15 @@ jobs:
           pip install -r requirements.txt
           pip install pytest openai
 
+      - name: Set up OpenAI API Key
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}  # This should be in your repository secrets
+
       - name: Run Tests
         run: |
+          python3 -m venv venv
+          source venv/bin/activate
+          pip install -r requirements.txt
           pytest test_eval_script.py  # Run pytest to execute your test cases
 
       - name: Extract Assistant ID
