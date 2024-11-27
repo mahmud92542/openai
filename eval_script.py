@@ -1,6 +1,7 @@
 import os
 import openai
 import json
+import pytest
 from difflib import SequenceMatcher  # For partial match
 
 # Load test cases from a JSON file
@@ -34,29 +35,16 @@ def compare_outputs(expected, actual, method="exact"):
     else:
         raise ValueError("Unknown comparison method: Choose 'exact', 'partial', or 'similarity'.")
 
-# Evaluate the tests
-def evaluate_tests(test_cases):
-    for test in test_cases:
-        print(f"Running Test: {test['id']}")
-        actual_output = get_actual_output(test["input"])
-        print(f"Expected: {test['expected_output']}")
-        print(f"Actual: {actual_output}")
+# Define a pytest test function for each test case
+@pytest.mark.parametrize("test_case", load_test_cases("test_cases.json"))
+def test_assistant_output(test_case):
+    print(f"Running Test: {test_case['id']}")
+    actual_output = get_actual_output(test_case["input"])
+    expected_output = test_case["expected_output"]
+    comparison_method = test_case.get("comparison_method", "exact")
 
-        if compare_outputs(test["expected_output"], actual_output, method=test.get("comparison_method", "exact")):
-            print(f"{test['id']} - PASS")
-        else:
-            print(f"{test['id']} - FAIL")
-        print("-" * 50)
+    print(f"Expected: {expected_output}")
+    print(f"Actual: {actual_output}")
 
-if __name__ == "__main__":
-    # Set OpenAI API key from environment variable
-    openai.api_key = os.getenv("OPENAI_API_KEY")
-    if not openai.api_key:
-        print("Error: OpenAI API key not found in environment variables.")
-        exit(1)
-
-    # Load test cases
-    test_cases = load_test_cases("test_cases.json")
-
-    # Evaluate test cases
-    evaluate_tests(test_cases)
+    # Perform comparison
+    assert compare_outputs(expected_output, actual_output, method=comparison_method), f"{test_case['id']} - FAIL"
