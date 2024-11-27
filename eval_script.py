@@ -1,9 +1,15 @@
-# In eval_script.py
+# eval_script.py
+import os
+import openai
+import json
+from difflib import SequenceMatcher  # For partial match
 
+# Function to load test cases from a JSON file
 def load_test_cases(file_path):
     with open(file_path, "r") as f:
         return json.load(f)
 
+# Function to call the OpenAI API to get the model's actual response
 def get_actual_output(input_text):
     try:
         response = openai.ChatCompletion.create(
@@ -17,6 +23,7 @@ def get_actual_output(input_text):
     except Exception as e:
         return f"ERROR: {e}"
 
+# Function to compare expected and actual outputs
 def compare_outputs(expected, actual, method="exact"):
     if method == "exact":
         return expected.strip().lower() == actual.strip().lower()
@@ -28,6 +35,7 @@ def compare_outputs(expected, actual, method="exact"):
     else:
         raise ValueError("Unknown comparison method: Choose 'exact', 'partial', or 'similarity'.")
 
+# Function to evaluate tests
 def evaluate_tests(test_cases):
     results = []
     for test in test_cases:
