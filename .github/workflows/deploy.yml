@@ -13,6 +13,47 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
+      # Set up Python environment in a separate step
+      - name: Set up Python Environment
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install Dependencies
+        run: |
+          python -m venv venv
+          source venv/bin/activate
+          pip install -r requirements.txt
+          pip install pytest
+
+      # Run Tests in a separate step
+      - name: Run Tests
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          source venv/bin/activate
+          pytest --maxfail=5 --disable-warnings --tb=short > result.log || true
+          # Display pytest output for debugging
+          cat result.log
+          # Calculate pass rate
+          total_tests=$(grep -c 'test' result.log)
+          failed_tests=$(grep -c 'FAILED' result.log)
+          if [ "$total_tests" -eq 0 ]; then
+            echo "No tests were run."
+            exit 1
+          fi
+          pass_rate=$((100 - (failed_tests * 100 / total_tests)))
+          echo "Total Tests: $total_tests"
+          echo "Failed Tests: $failed_tests"
+          echo "Pass Rate: $pass_rate%"
+          
+          # If pass rate is below 80%, fail the job
+          if [ "$pass_rate" -lt 80 ]; then
+            echo "Test pass rate is below 80%. Failing the job."
+            exit 1
+          fi
+
+      # Extract Assistant ID & Update Assistant (only if tests pass)
       - name: Extract Assistant ID
         id: extract-id
         run: |
@@ -38,32 +79,8 @@ jobs:
 
           echo "::set-output name=assistant_id::$ASSISTANT_ID" # Pass it as a GitHub Actions output
 
-      - name: Run Tests
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: |
-          python3 -m venv venv
-          source venv/bin/activate
-          pip install -r requirements.txt
-          # Run the tests and store the results in a file
-          pytest --maxfail=5 --disable-warnings --maxfail=5 > result.log || exit_code=$?
-          
-          # Check the pass rate of the tests
-          total_tests=$(grep -o "tests run" result.log | awk '{print $3}')
-          failed_tests=$(grep -o "failed" result.log | awk '{print $2}')
-          pass_rate=$(( 100 - (failed_tests * 100 / total_tests) ))
-
-          echo "Total Tests: $total_tests"
-          echo "Failed Tests: $failed_tests"
-          echo "Pass Rate: $pass_rate%"
-
-          if [ "$pass_rate" -lt 80 ]; then
-            echo "Test pass rate is below 80%. Failing the job."
-            exit 1
-          fi
-
       - name: Update Assistant on OpenAI
-        if: success()  # Only proceed if the tests pass and pass rate is above 80%
+        if: success()  # Only proceed if the tests pass
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
