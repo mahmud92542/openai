@@ -24,18 +24,22 @@ def get_actual_output(input_text):
 
 # Compare expected and actual outputs
 def compare_outputs(expected, actual, method="exact"):
+    expected = expected.strip().lower()
+    actual = actual.strip().lower()
+
     if method == "exact":
-        return expected.strip().lower() == actual.strip().lower()
+        return expected == actual
     elif method == "partial":
-        return expected.strip().lower() in actual.strip().lower()
+        return expected in actual
     elif method == "similarity":
-        similarity = SequenceMatcher(None, expected.strip().lower(), actual.strip().lower()).ratio()
-        return similarity > 0.8
+        similarity = SequenceMatcher(None, expected, actual).ratio()
+        return similarity >= 0.8  # 80% similarity for "PASS"
     else:
         raise ValueError("Unknown comparison method: Choose 'exact', 'partial', or 'similarity'.")
 
-# Evaluate the tests
+# Evaluate the tests and return the results
 def evaluate_tests(test_cases):
+    results = []
     for test in test_cases:
         print(f"Running Test: {test['id']}")
         actual_output = get_actual_output(test["input"])
@@ -43,10 +47,27 @@ def evaluate_tests(test_cases):
         print(f"Actual: {actual_output}")
 
         if compare_outputs(test["expected_output"], actual_output, method=test.get("comparison_method", "exact")):
+            results.append((test["id"], "PASS"))
             print(f"{test['id']} - PASS")
         else:
+            results.append((test["id"], "FAIL"))
             print(f"{test['id']} - FAIL")
         print("-" * 50)
+
+    # Calculate percentage of passed tests
+    pass_count = sum(1 for _, result in results if result == "PASS")
+    total_tests = len(results)
+    pass_percentage = (pass_count / total_tests) * 100
+
+    print(f"Total Tests: {total_tests}, Passed: {pass_count}, Pass Percentage: {pass_percentage}%")
+
+    # Check if 80% tests passed
+    if pass_percentage >= 80:
+        print("Deployment triggered: 80% or more tests passed.")
+        return True  # Indicate that deployment can happen
+    else:
+        print("Deployment not triggered: Less than 80% tests passed.")
+        return False
 
 if __name__ == "__main__":
     # Set OpenAI API key from environment variable
@@ -59,4 +80,10 @@ if __name__ == "__main__":
     test_cases = load_test_cases("test_cases.json")
 
     # Evaluate test cases
-    evaluate_tests(test_cases)
+    deploy = evaluate_tests(test_cases)
+
+    # Trigger deployment if 80% tests pass
+    if deploy:
+        print("Proceeding with deployment...")
+    else:
+        print("Deployment aborted.")
