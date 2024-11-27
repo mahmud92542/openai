@@ -1,15 +1,14 @@
-# eval_script.py
 import os
 import openai
 import json
 from difflib import SequenceMatcher  # For partial match
 
-# Function to load test cases from a JSON file
+# Load test cases from a JSON file
 def load_test_cases(file_path):
     with open(file_path, "r") as f:
         return json.load(f)
 
-# Function to call the OpenAI API to get the model's actual response
+# Call the OpenAI API to get the model's actual response
 def get_actual_output(input_text):
     try:
         response = openai.ChatCompletion.create(
@@ -23,7 +22,7 @@ def get_actual_output(input_text):
     except Exception as e:
         return f"ERROR: {e}"
 
-# Function to compare expected and actual outputs
+# Compare expected and actual outputs
 def compare_outputs(expected, actual, method="exact"):
     if method == "exact":
         return expected.strip().lower() == actual.strip().lower()
@@ -35,13 +34,29 @@ def compare_outputs(expected, actual, method="exact"):
     else:
         raise ValueError("Unknown comparison method: Choose 'exact', 'partial', or 'similarity'.")
 
-# Function to evaluate tests
+# Evaluate the tests
 def evaluate_tests(test_cases):
-    results = []
     for test in test_cases:
+        print(f"Running Test: {test['id']}")
         actual_output = get_actual_output(test["input"])
+        print(f"Expected: {test['expected_output']}")
+        print(f"Actual: {actual_output}")
+
         if compare_outputs(test["expected_output"], actual_output, method=test.get("comparison_method", "exact")):
-            results.append((test["id"], "PASS"))
+            print(f"{test['id']} - PASS")
         else:
-            results.append((test["id"], "FAIL"))
-    return results
+            print(f"{test['id']} - FAIL")
+        print("-" * 50)
+
+if __name__ == "__main__":
+    # Set OpenAI API key from environment variable
+    openai.api_key = os.getenv("OPENAI_API_KEY")
+    if not openai.api_key:
+        print("Error: OpenAI API key not found in environment variables.")
+        exit(1)
+
+    # Load test cases
+    test_cases = load_test_cases("test_cases.json")
+
+    # Evaluate test cases
+    evaluate_tests(test_cases)
