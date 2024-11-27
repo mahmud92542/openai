@@ -26,7 +26,7 @@
   {
     "id": "TC-005",
     "input": "Who is the president of the United States?",
-    "expected_output": "Joe Biden",
+    "expected_output": "Joseph R. Biden Jr",
     "comparison_method": "partial"
   }
 ]
