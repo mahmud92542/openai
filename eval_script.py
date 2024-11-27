@@ -36,8 +36,9 @@ def compare_outputs(expected, actual, method="exact"):
 
 # Evaluate the tests
 def evaluate_tests(test_cases):
+    passed_tests = 0
+    total_tests = len(test_cases)
     results = []
-    pass_count = 0  # To count the number of passed tests
 
     for test in test_cases:
         print(f"Running Test: {test['id']}")
@@ -45,18 +46,22 @@ def evaluate_tests(test_cases):
         print(f"Expected: {test['expected_output']}")
         print(f"Actual: {actual_output}")
 
-        # Check the comparison result
-        if compare_outputs(test["expected_output"], actual_output, method=test.get("comparison_method", "exact")):
+        test_result = compare_outputs(test["expected_output"], actual_output, method=test.get("comparison_method", "exact"))
+        
+        if test_result:
             results.append((test['id'], "PASS"))
-            pass_count += 1
+            passed_tests += 1
             print(f"{test['id']} - PASS")
         else:
             results.append((test['id'], "FAIL"))
             print(f"{test['id']} - FAIL")
+        
         print("-" * 50)
 
-    # Calculate the pass percentage
-    pass_percentage = (pass_count / len(test_cases)) * 100
+    # Calculate pass percentage
+    pass_percentage = (passed_tests / total_tests) * 100
+    print(f"Pass percentage: {pass_percentage}%")
+    
     return results, pass_percentage
 
 if __name__ == "__main__":
@@ -71,6 +76,5 @@ if __name__ == "__main__":
 
     # Evaluate test cases
     results, pass_percentage = evaluate_tests(test_cases)
-
-    # Print results and pass percentage
-    print(f"Pass Percentage: {pass_percentage}%")
+    print(f"Test Results: {results}")
+    print(f"Overall pass percentage: {pass_percentage}%")
