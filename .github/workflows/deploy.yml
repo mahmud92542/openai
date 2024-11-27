@@ -6,7 +6,8 @@ on:
       - main
 
 jobs:
-  deploy-assistant:
+  # Job to set up the Python environment and install dependencies
+  setup-environment:
     runs-on: ubuntu-latest
 
     steps:
@@ -24,15 +25,39 @@ jobs:
           pip install -r requirements.txt
           pip install pytest openai
 
+  # Job to set up OpenAI API Key as an environment variable
+  setup-api-key:
+    runs-on: ubuntu-latest
+    needs: setup-environment  # Ensure this runs after setup-environment
+
+    steps:
       - name: Set up OpenAI API Key
         run: echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> $GITHUB_ENV
 
-      - name: Run Tests
+  # Job to run the tests
+  run-tests:
+    runs-on: ubuntu-latest
+    needs: setup-api-key  # Ensure this runs after the API key is set up
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python virtual environment and run tests
         run: |
           python3 -m venv venv
           source venv/bin/activate
           pip install -r requirements.txt
           pytest test_eval_script.py  # Run pytest to execute your test cases
+
+  # Job to extract Assistant ID from the config file
+  extract-assistant-id:
+    runs-on: ubuntu-latest
+    needs: run-tests  # Ensure this runs after tests are executed
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
 
       - name: Extract Assistant ID
         id: extract-id
@@ -59,8 +84,17 @@ jobs:
 
           echo "::set-output name=assistant_id::$ASSISTANT_ID" # Pass it as a GitHub Actions output
 
+  # Job to update Assistant on OpenAI using the extracted Assistant ID
+  update-assistant:
+    runs-on: ubuntu-latest
+    needs: extract-assistant-id  # Ensure this runs after extracting the Assistant ID
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
       - name: Update Assistant on OpenAI
-        if: success()  # Only proceed if the tests pass
+        if: success()  # Only proceed if previous jobs were successful
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
@@ -92,4 +126,3 @@ jobs:
             echo "Failed to update assistant. HTTP Status: $RESPONSE"
             cat response.json
             exit 1
-          fi
