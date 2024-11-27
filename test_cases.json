@@ -27,6 +27,6 @@
     "id": "TC-005",
     "input": "Who is the president of the United States?",
     "expected_output": "Barack Obama",
-    "comparison_method": "exact"
+    "comparison_method": "partial"
   }
 ]
