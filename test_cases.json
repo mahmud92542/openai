@@ -1,0 +1,20 @@
+[
+    {
+        "id": "TC-001",
+        "input": "What is the capital of France?",
+        "expected_output": "Paris",
+        "comparison_method": "partial"
+    },
+    {
+        "id": "TC-002",
+        "input": "Who wrote Pride and Prejudice?",
+        "expected_output": "Jane Austen",
+        "comparison_method": "partial"
+    },
+    {
+        "id": "TC-003",
+        "input": "Tell me about Python.",
+        "expected_output": "Python is a programming language",
+        "comparison_method": "partial"
+    }
+]
