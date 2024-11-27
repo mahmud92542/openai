@@ -2,8 +2,8 @@ name: Deploy Assistant to OpenAI
 
 on:
   push:
-    branches:
-      - main
+    paths:
+      - assistant_config.json
 
 jobs:
   deploy-assistant:
