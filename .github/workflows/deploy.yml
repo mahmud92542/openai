@@ -38,7 +38,17 @@ jobs:
 
           echo "::set-output name=assistant_id::$ASSISTANT_ID" # Pass it as a GitHub Actions output
 
+      - name: Run Tests
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          python3 -m venv venv
+          source venv/bin/activate
+          pip install -r requirements.txt
+          python eval_test.py  # Replace with your test script name
+
       - name: Update Assistant on OpenAI
+        if: success()  # Only proceed if the tests pass
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
