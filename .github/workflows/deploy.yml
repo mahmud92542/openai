@@ -12,12 +12,6 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
-
-      - name: List Files after Checkout
-        run: |
-          echo "Listing files after checkout:"
-          pwd
-          ls -alt
           
       - name: Extract Assistant ID
         id: extract-id
@@ -44,12 +38,6 @@ jobs:
 
           echo "::set-output name=assistant_id::$ASSISTANT_ID" # Pass it as a GitHub Actions output
 
-      - name: List Files Before Running Tests
-        run: |
-          echo "Listing files before running tests:"
-          pwd
-          ls -alt
-
       - name: Run Tests
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -60,12 +48,7 @@ jobs:
           python3 -m venv venv
           source venv/bin/activate
           pip install -r requirements.txt
-          python /home/runner/work/${{ github.repository }}/eval_test.py  # Absolute path to the script
-
-      - name: List Files Before Updating Assistant
-        run: |
-          echo "Listing files before updating assistant:"
-          ls -alt /home/runner/work/${{ github.repository }}  # Shows files in the repo root
+          python /home/runner/work/${{ github.repository }}/eval_script.py  # Absolute path to the script
 
       - name: Update Assistant on OpenAI
         if: success()  # Only proceed if the tests pass
