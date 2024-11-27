@@ -1,15 +1,9 @@
-import os
-import openai
-import json
-import pytest
-from difflib import SequenceMatcher  # For partial match
+# In eval_script.py
 
-# Load test cases from a JSON file
 def load_test_cases(file_path):
     with open(file_path, "r") as f:
         return json.load(f)
 
-# Call the OpenAI API to get the model's actual response
 def get_actual_output(input_text):
     try:
         response = openai.ChatCompletion.create(
@@ -23,7 +17,6 @@ def get_actual_output(input_text):
     except Exception as e:
         return f"ERROR: {e}"
 
-# Compare expected and actual outputs
 def compare_outputs(expected, actual, method="exact"):
     if method == "exact":
         return expected.strip().lower() == actual.strip().lower()
@@ -35,16 +28,12 @@ def compare_outputs(expected, actual, method="exact"):
     else:
         raise ValueError("Unknown comparison method: Choose 'exact', 'partial', or 'similarity'.")
 
-# Define a pytest test function for each test case
-@pytest.mark.parametrize("test_case", load_test_cases("test_cases.json"))
-def test_assistant_output(test_case):
-    print(f"Running Test: {test_case['id']}")
-    actual_output = get_actual_output(test_case["input"])
-    expected_output = test_case["expected_output"]
-    comparison_method = test_case.get("comparison_method", "exact")
-
-    print(f"Expected: {expected_output}")
-    print(f"Actual: {actual_output}")
-
-    # Perform comparison
-    assert compare_outputs(expected_output, actual_output, method=comparison_method), f"{test_case['id']} - FAIL"
+def evaluate_tests(test_cases):
+    results = []
+    for test in test_cases:
+        actual_output = get_actual_output(test["input"])
+        if compare_outputs(test["expected_output"], actual_output, method=test.get("comparison_method", "exact")):
+            results.append((test["id"], "PASS"))
+        else:
+            results.append((test["id"], "FAIL"))
+    return results
