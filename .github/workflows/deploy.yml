@@ -12,7 +12,7 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
-          
+
       - name: Extract Assistant ID
         id: extract-id
         run: |
@@ -42,13 +42,10 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          CONFIG_FILE="/home/runner/work/${{ github.repository }}/assistant_config.json"  # Absolute path to the config file
-          echo "Listing files before running Python tests:"
-          ls -alt /home/runner/work/${{ github.repository }}  # Shows files in the repo root
           python3 -m venv venv
           source venv/bin/activate
           pip install -r requirements.txt
-          python /home/runner/work/${{ github.repository }}/eval_script.py  # Absolute path to the script
+          python eval_script.py  # Replace with your test script name
 
       - name: Update Assistant on OpenAI
         if: success()  # Only proceed if the tests pass
