@@ -2,7 +2,7 @@ name: Deploy Assistant to OpenAI
 
 on:
   push:
-    paths:
+    branches:
       - main
 
 jobs:
@@ -16,6 +16,7 @@ jobs:
       - name: List Files after Checkout
         run: |
           echo "Listing files after checkout:"
+          pwd
           ls -alt
           
       - name: Extract Assistant ID
@@ -46,7 +47,8 @@ jobs:
       - name: List Files Before Running Tests
         run: |
           echo "Listing files before running tests:"
-          ls -alt /home/runner/work/${{ github.repository }}  # Shows files in the repo root
+          pwd
+          ls -alt
 
       - name: Run Tests
         env:
