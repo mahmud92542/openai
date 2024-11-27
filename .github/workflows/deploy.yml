@@ -45,10 +45,25 @@ jobs:
           python3 -m venv venv
           source venv/bin/activate
           pip install -r requirements.txt
-          python eval_script.py  # Replace with your test script name
+          # Run the tests and store the results in a file
+          pytest --maxfail=5 --disable-warnings --maxfail=5 > result.log || exit_code=$?
+          
+          # Check the pass rate of the tests
+          total_tests=$(grep -o "tests run" result.log | awk '{print $3}')
+          failed_tests=$(grep -o "failed" result.log | awk '{print $2}')
+          pass_rate=$(( 100 - (failed_tests * 100 / total_tests) ))
+
+          echo "Total Tests: $total_tests"
+          echo "Failed Tests: $failed_tests"
+          echo "Pass Rate: $pass_rate%"
+
+          if [ "$pass_rate" -lt 80 ]; then
+            echo "Test pass rate is below 80%. Failing the job."
+            exit 1
+          fi
 
       - name: Update Assistant on OpenAI
-        if: success()  # Only proceed if the tests pass
+        if: success()  # Only proceed if the tests pass and pass rate is above 80%
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
