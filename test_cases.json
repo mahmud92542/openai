@@ -3,7 +3,7 @@
     "id": "TC-001",
     "input": "What is the capital of France?",
     "expected_output": "Paris",
-    "comparison_method": "partial"
+    "comparison_method": "similarity"
   },
   {
     "id": "TC-002",
