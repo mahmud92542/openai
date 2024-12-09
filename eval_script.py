@@ -1,10 +1,19 @@
 import os
 import openai
 import json
-from difflib import SequenceMatcher  # For partial match
+from difflib import SequenceMatcher
 
-# Set API key from environment variable
-openai.api_key = os.getenv("OPENAI_API_KEY")  # ✅ Correct way to set API key
+# Set OpenAI API key and Assistant ID from environment variables
+openai.api_key = os.getenv("OPENAI_API_KEY")
+assistant_id = os.getenv("ASSISTANT_ID")
+
+if not openai.api_key:
+    print("Error: OPENAI_API_KEY is not found in environment variables.")
+    exit(1)
+
+if not assistant_id:
+    print("Error: ASSISTANT_ID is not found in environment variables.")
+    exit(1)
 
 # Load test cases from a JSON file
 def load_test_cases(file_path):
@@ -14,11 +23,6 @@ def load_test_cases(file_path):
 # Call the OpenAI API to get the assistant's actual response
 def get_actual_output(input_text):
     try:
-        # Get the assistant ID from the environment
-        assistant_id = asst_L42MN296w0C5D1fNcomfTvi1  
-        if not assistant_id:
-            return "ERROR: ASSISTANT_ID is not set in the environment."
-
         # 🔍 Log the assistant model being called
         print(f"Calling assistant model: {assistant_id}")
         
@@ -39,8 +43,8 @@ def get_actual_output(input_text):
         
         # Return the assistant's reply
         return response["choices"][0]["message"]["content"].strip()
-    except Exception as e:
-        return f"ERROR: {e}"
+    except openai.error.OpenAIError as e:
+        return f"ERROR: {e.user_message}"
 
 # Compare expected and actual outputs
 def compare_outputs(expected, actual, method="exact"):
@@ -85,18 +89,6 @@ def evaluate_tests(test_cases):
     return results, pass_percentage
 
 if __name__ == "__main__":
-    # ✅ Set OpenAI API key and Assistant ID from environment variables
-    openai.api_key = os.getenv("OPENAI_API_KEY")
-    assistant_id = os.getenv("ASSISTANT_ID")
-    
-    if not openai.api_key:
-        print("Error: OPENAI_API_KEY is not found in environment variables.")
-        exit(1)
-        
-    if not assistant_id:
-        print("Error: ASSISTANT_ID is not found in environment variables.")
-        exit(1)
-
     # Load test cases
     test_cases = load_test_cases("test_cases.json")
 
