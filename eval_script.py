@@ -95,6 +95,6 @@ if __name__ == "__main__":
     test_cases = load_test_cases("test_cases.json")
 
     # Evaluate test cases
-    results, pass_percentage = evaluate_tests(test_cases, assistant_id)
+    results, pass_percentage = evaluate_tests(test_cases, assistant_id)  # Make sure assistant_id is passed
     print(f"Test Results: {results}")
     print(f"Overall pass percentage: {pass_percentage}%")
