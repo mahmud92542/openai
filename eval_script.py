@@ -15,7 +15,7 @@ def load_test_cases(file_path):
 def get_actual_output(input_text):
     try:
         # Get the assistant ID from the environment
-        assistant_id = os.getenv("ASSISTANT_ID")  
+        assistant_id = asst_L42MN296w0C5D1fNcomfTvi1  
         if not assistant_id:
             return "ERROR: ASSISTANT_ID is not set in the environment."
 
