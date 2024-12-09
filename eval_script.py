@@ -4,7 +4,7 @@ import json
 from difflib import SequenceMatcher  # For partial match
 
 # Set your assistant ID at the beginning of the script
-assistant_id = "asst_L42MN296w0C5D1fNcomfTvi1"  # Example assistant ID
+assistant_id = "asst_7wJ5VYgMJYjTtALPHdieu7sE"  # Example assistant ID
 
 # Load test cases from a JSON file
 def load_test_cases(file_path):
