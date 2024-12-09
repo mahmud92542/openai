@@ -3,6 +3,9 @@ import openai
 import json
 from difflib import SequenceMatcher  # For partial match
 
+# Set your assistant ID at the beginning of the script
+assistant_id = "asst_L42MN296w0C5D1fNcomfTvi1"  # Example assistant ID
+
 # Load test cases from a JSON file
 def load_test_cases(file_path):
     with open(file_path, "r") as f:
@@ -59,7 +62,7 @@ def evaluate_tests(test_cases, assistant_id):
 
     for test in test_cases:
         print(f"Running Test: {test['id']}")
-        actual_output = get_actual_output(test["input"], assistant_id)
+        actual_output = get_actual_output(test["input"], assistant_id)  # Pass assistant_id here
         print(f"Expected: {test['expected_output']}")
         print(f"Actual: {actual_output}")
 
@@ -88,13 +91,10 @@ if __name__ == "__main__":
         print("Error: OpenAI API key not found in environment variables.")
         exit(1)
 
-    # Set your assistant ID (for example, `asst_L42MN296w0C5D1fNcomfTvi1`)
-    assistant_id = "asst_L42MN296w0C5D1fNcomfTvi1"
-
     # Load test cases
     test_cases = load_test_cases("test_cases.json")
 
     # Evaluate test cases
-    results, pass_percentage = evaluate_tests(test_cases, assistant_id)  # Make sure assistant_id is passed
+    results, pass_percentage = evaluate_tests(test_cases, assistant_id)  # Pass the assistant_id here
     print(f"Test Results: {results}")
     print(f"Overall pass percentage: {pass_percentage}%")
