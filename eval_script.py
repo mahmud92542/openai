@@ -25,27 +25,6 @@ def get_actual_output(input_text, assistant_id):
     except Exception as e:
         return f"ERROR: {e}"
 
-# Call the OpenAI API to get the assistant's actual response
-def get_actual_output(input_text, assistant_id):
-    try:
-        # Retrieve the assistant using its ID
-        my_assistant = get_assistant(assistant_id)
-        
-        if "ERROR" in str(my_assistant):
-            return my_assistant  # Return the error if assistant retrieval fails
-        
-        # Use the assistant for the response generation
-        response = openai.ChatCompletion.create(
-            model=my_assistant["id"],  # Use the assistant ID as the model
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": input_text},
-            ],
-        )
-        return response["choices"][0]["message"]["content"].strip()
-    except Exception as e:
-        return f"ERROR: {e}"
-
 # Compare expected and actual outputs
 def compare_outputs(expected, actual, method="exact"):
     if method == "exact":
@@ -66,12 +45,12 @@ def evaluate_tests(test_cases, assistant_id):
 
     for test in test_cases:
         print(f"Running Test: {test['id']}")
-        actual_output = get_actual_output(test["input"], assistant_id)  # Pass assistant_id here
+        actual_output = get_actual_output(test["input"], assistant_id)
         print(f"Expected: {test['expected_output']}")
         print(f"Actual: {actual_output}")
 
         test_result = compare_outputs(test["expected_output"], actual_output, method=test.get("comparison_method", "exact"))
-        
+
         if test_result:
             results.append((test['id'], "PASS"))
             passed_tests += 1
@@ -79,13 +58,13 @@ def evaluate_tests(test_cases, assistant_id):
         else:
             results.append((test['id'], "FAIL"))
             print(f"{test['id']} - FAIL")
-        
+
         print("-" * 50)
 
     # Calculate pass percentage
     pass_percentage = (passed_tests / total_tests) * 100
     print(f"Pass percentage: {pass_percentage}%")
-    
+
     return results, pass_percentage
 
 if __name__ == "__main__":
@@ -99,6 +78,6 @@ if __name__ == "__main__":
     test_cases = load_test_cases("test_cases.json")
 
     # Evaluate test cases
-    results, pass_percentage = evaluate_tests(test_cases, assistant_id)  # Pass the assistant_id here
+    results, pass_percentage = evaluate_tests(test_cases, assistant_id)
     print(f"Test Results: {results}")
     print(f"Overall pass percentage: {pass_percentage}%")
