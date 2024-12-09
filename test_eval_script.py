@@ -6,8 +6,14 @@ from eval_script import evaluate_tests, load_test_cases
 def test_cases():
     return load_test_cases("test_cases.json")
 
-def test_eval_script(test_cases):
-    results, pass_percentage = evaluate_tests(test_cases)
+@pytest.fixture
+def assistant_id():
+    # Set your assistant ID here
+    return "asst_L42MN296w0C5D1fNcomfTvi1"  # Example assistant ID
+
+def test_eval_script(test_cases, assistant_id):
+    # Pass the assistant_id to evaluate_tests
+    results, pass_percentage = evaluate_tests(test_cases, assistant_id)
 
     # Check if pass percentage is 80 or greater
     assert pass_percentage >= 80, f"Tests did not pass enough. Only {pass_percentage}% passed."
