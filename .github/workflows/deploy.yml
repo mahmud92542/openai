@@ -16,7 +16,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: 3.12  # Set the Python version you want to use
+          python-version: 3.12
 
       - name: Install dependencies
         run: |
@@ -24,7 +24,7 @@ jobs:
           pip install -r requirements.txt
           pip install pytest openai
 
-      - name: Set up OpenAI API Key
+      - name: Set up OpenAI API Key and Assistant ID
         run: |
           echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> $GITHUB_ENV
           echo "ASSISTANT_ID=${{ secrets.ASSISTANT_ID }}" >> $GITHUB_ENV
@@ -34,7 +34,7 @@ jobs:
           python3 -m venv venv
           source venv/bin/activate
           pip install -r requirements.txt
-          pytest test_eval_script.py  # Run pytest to execute your test cases
+          pytest test_eval_script.py
 
       - name: Extract Assistant ID
         id: extract-id
@@ -46,23 +46,21 @@ jobs:
             exit 1
           fi
 
-          # Validate JSON format
           if ! jq empty "$CONFIG_FILE"; then
             echo "Invalid JSON format in $CONFIG_FILE"
             exit 1
           fi
 
-          # Extract assistant ID
           ASSISTANT_ID=$(jq -r '.id // empty' "$CONFIG_FILE")
           if [ -z "$ASSISTANT_ID" ]; then
             echo "Assistant ID not found in $CONFIG_FILE. Exiting."
             exit 1
           fi
 
-          echo "::set-output name=assistant_id::$ASSISTANT_ID" # Pass it as a GitHub Actions output
+          echo "::set-output name=assistant_id::$ASSISTANT_ID"
 
       - name: Update Assistant on OpenAI
-        if: success()  # Only proceed if the tests pass
+        if: success()
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ASSISTANT_ID: ${{ secrets.ASSISTANT_ID }}
@@ -71,14 +69,11 @@ jobs:
           ASSISTANT_ID="${{ steps.extract-id.outputs.assistant_id }}"
           API_URL="https://api.openai.com/v1/assistants/$ASSISTANT_ID"
 
-          # Extract relevant fields for update
           jq '{instructions, tools, model}' "$CONFIG_FILE" > temp_config.json
 
-          # Debugging: Display payload
           echo "Payload being sent:"
           cat temp_config.json
 
-          # Execute cURL command
           RESPONSE=$(curl -s -o response.json -w "%{http_code}" \
             -X POST \
             -H "Content-Type: application/json" \
@@ -87,7 +82,6 @@ jobs:
             -d @temp_config.json \
             "$API_URL")
 
-          # Check response status
           if [ "$RESPONSE" -eq 200 ]; then
             echo "Assistant successfully updated!"
             cat response.json
@@ -95,4 +89,3 @@ jobs:
             echo "Failed to update assistant. HTTP Status: $RESPONSE"
             cat response.json
             exit 1
-          fi
