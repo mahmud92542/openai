@@ -21,7 +21,7 @@
     "id": "TC-004",
     "input": "Tell me about Python programming.",
     "expected_output": "Python is a programming language.",
-    "comparison_method": "similarity"
+    "comparison_method": "ai_comparison"
   },
   {
     "id": "TC-005",
