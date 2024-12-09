@@ -4,7 +4,7 @@ import json
 from difflib import SequenceMatcher  # For partial match
 
 # Set your assistant ID at the beginning of the script
-assistant_id = "asst_7wJ5VYgMJYjTtALPHdieu7sE"  # Example assistant ID
+assistant_id = "asst_7wJ5VYgMJYjTtALPHdieu7sE"  # Your assistant ID
 
 # Load test cases from a JSON file
 def load_test_cases(file_path):
@@ -15,9 +15,8 @@ def load_test_cases(file_path):
 def get_actual_output(input_text, assistant_id):
     try:
         response = openai.ChatCompletion.create(
-            model="gpt-4o",
+            assistant_id=assistant_id,
             messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": input_text},
             ],
         )
@@ -46,17 +45,17 @@ def ai_comparison(expected, actual, ai_model="gpt-4"):
                  f"Expected Output: {expected}\n\n" \
                  f"Actual Output: {actual}\n\n" \
                  f"Rate their similarity on a scale of 0 to 100, where 0 is completely different and 100 is exactly the same."
-
         response = openai.Completion.create(
             model=ai_model,
             prompt=prompt,
-            max_tokens=50,
+            max_tokens=10,
             temperature=0.0  # Ensure the response is deterministic
         )
         
-        similarity_score = float(response.choices[0].text.strip())  # Extract the similarity score
-        return similarity_score >= 80  # You can adjust the threshold (e.g., 80 for "good" similarity)
-    
+        # Extract the numeric similarity score from the response
+        similarity_score = float(''.join(filter(str.isdigit, response.choices[0].text.strip())))
+        return similarity_score >= 80  # You can adjust the threshold as needed
+        
     except Exception as e:
         print(f"Error during AI comparison: {e}")
         return False
