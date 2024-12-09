@@ -14,9 +14,8 @@ def load_test_cases(file_path):
 # Retrieve your custom assistant
 def get_assistant(assistant_id):
     try:
-        # Retrieve the assistant by ID using the OpenAI API
-        client = openai.OpenAI()
-        my_assistant = client.beta.assistants.retrieve(assistant_id)
+        # Correct method to retrieve the assistant
+        my_assistant = openai.Assistant.retrieve(assistant_id)
         return my_assistant
     except Exception as e:
         return f"ERROR: {e}"
