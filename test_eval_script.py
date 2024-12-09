@@ -9,7 +9,7 @@ def test_cases():
 @pytest.fixture
 def assistant_id():
     # Set your assistant ID here
-    return "asst_L42MN296w0C5D1fNcomfTvi1"  # Example assistant ID
+    return "asst_7wJ5VYgMJYjTtALPHdieu7sE"  # Example assistant ID
 
 def test_eval_script(test_cases, assistant_id):
     # Pass the assistant_id to evaluate_tests
