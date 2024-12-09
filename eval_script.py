@@ -4,7 +4,7 @@ import json
 from difflib import SequenceMatcher  # For partial match
 
 # Set your assistant ID at the beginning of the script
-assistant_id = "asst_7wJ5VYgMJYjTtALPHdieu7sE"  # Your assistant ID
+assistant_id = "asst_7wJ5VYgMJYjTtALPHdieu7sE"  # You can also use "gpt-3.5-turbo" if that's your assistant
 
 # Load test cases from a JSON file
 def load_test_cases(file_path):
@@ -14,11 +14,8 @@ def load_test_cases(file_path):
 # Call the OpenAI API to get the assistant's actual response
 def get_actual_output(input_text, assistant_id):
     try:
-        # Initialize the OpenAI client with beta features
-        client = openai.Client()
-
-        response = client.chat.completions.create(
-            assistant_id=assistant_id,
+        response = openai.ChatCompletion.create(
+            model=assistant_id,  # Use the assistant ID or model name
             messages=[
                 {"role": "user", "content": input_text},
             ],
@@ -46,9 +43,8 @@ def compare_outputs(expected, actual, method="exact", ai_model="gpt-4"):
 # AI-powered comparison using OpenAI API
 def ai_comparison(expected, actual, ai_model="gpt-4"):
     try:
-        client = openai.Client()
-        response = client.chat.completions.create(
-            model=ai_model,
+        response = openai.ChatCompletion.create(
+            model=ai_model,  # Use the assistant ID or model name
             messages=[
                 {"role": "system", "content": "You are an assistant that evaluates the similarity of two texts."},
                 {
@@ -108,6 +104,14 @@ if __name__ == "__main__":
     if not openai.api_key:
         print("Error: OpenAI API key not found in environment variables.")
         exit(1)
+
+    # Load test cases
+    file_path = "test_cases.json"  # Specify your JSON file path
+    if not os.path.exists(file_path):
+        print(f"Error: Test case file '{file_path}' not found.")
+        exit(1)
+
+    test_cases = load_test_cases(file_path)
 
     # Evaluate the test cases
     results, pass_percentage = evaluate_tests(test_cases, assistant_id)
