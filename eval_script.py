@@ -1,7 +1,7 @@
 import os
 import json
 from difflib import SequenceMatcher  # For partial match
-from openai import OpenAI  # Import the OpenAI client
+import openai  # Import the OpenAI client
 
 # Initialize the OpenAI client
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
