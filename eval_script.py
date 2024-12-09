@@ -4,7 +4,7 @@ from difflib import SequenceMatcher  # For partial match
 import openai  # Import the OpenAI client
 
 # Initialize the OpenAI client
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # Load test cases from a JSON file
 def load_test_cases(file_path):
