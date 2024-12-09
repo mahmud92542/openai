@@ -14,17 +14,17 @@ def load_test_cases(file_path):
 # Call the OpenAI API to get the assistant's actual response
 def get_actual_output(input_text):
     try:
-        # Get the assistant ID from environment
+        # Get the assistant ID from the environment
         assistant_id = os.getenv("ASSISTANT_ID")  
         if not assistant_id:
             return "ERROR: ASSISTANT_ID is not set in the environment."
 
-        # 🔍 Log the model being called
-        print(f"Calling assistant model: ftl-{assistant_id}")
+        # 🔍 Log the assistant model being called
+        print(f"Calling assistant model: {assistant_id}")
         
-        # Call the assistant using the assistant ID
+        # Call the assistant using the assistant ID as the model
         response = openai.ChatCompletion.create(
-            model=f"ftl-{assistant_id}",  # ✅ Use assistant as the model
+            model=assistant_id,  # ✅ Use assistant ID as the model
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": input_text},
@@ -34,7 +34,7 @@ def get_actual_output(input_text):
         # 🔍 Log the model used in the response
         print(f"Model used in response: {response['model']}")
 
-        # 🔍 Log the full API response
+        # 🔍 Log the full API response for debugging
         print(f"Full API response: {json.dumps(response, indent=2)}")
         
         # Return the assistant's reply
