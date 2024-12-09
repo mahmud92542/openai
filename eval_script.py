@@ -15,7 +15,7 @@ def load_test_cases(file_path):
 def get_actual_output(input_text, assistant_id):
     try:
         response = openai.ChatCompletion.create(
-            model=assistant_id,
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": input_text},
@@ -26,7 +26,7 @@ def get_actual_output(input_text, assistant_id):
         return f"ERROR: {e}"
 
 # Compare expected and actual outputs
-def compare_outputs(expected, actual, method="exact"):
+def compare_outputs(expected, actual, method="exact", ai_model="gpt-4"):
     if method == "exact":
         return expected.strip().lower() == actual.strip().lower()
     elif method == "partial":
@@ -34,8 +34,32 @@ def compare_outputs(expected, actual, method="exact"):
     elif method == "similarity":
         similarity = SequenceMatcher(None, expected.strip().lower(), actual.strip().lower()).ratio()
         return similarity > 0.7
+    elif method == "ai_comparison":
+        return ai_comparison(expected, actual, ai_model)
     else:
-        raise ValueError("Unknown comparison method: Choose 'exact', 'partial', or 'similarity'.")
+        raise ValueError("Unknown comparison method: Choose 'exact', 'partial', 'similarity', or 'ai_comparison'.")
+
+# AI-powered comparison using OpenAI API
+def ai_comparison(expected, actual, ai_model="gpt-4"):
+    try:
+        prompt = f"Compare the following two text outputs and rate their similarity on a scale from 0 to 100:\n\n" \
+                 f"Expected Output: {expected}\n\n" \
+                 f"Actual Output: {actual}\n\n" \
+                 f"Rate their similarity on a scale of 0 to 100, where 0 is completely different and 100 is exactly the same."
+
+        response = openai.Completion.create(
+            model=ai_model,
+            prompt=prompt,
+            max_tokens=50,
+            temperature=0.0  # Ensure the response is deterministic
+        )
+        
+        similarity_score = float(response.choices[0].text.strip())  # Extract the similarity score
+        return similarity_score >= 80  # You can adjust the threshold (e.g., 80 for "good" similarity)
+    
+    except Exception as e:
+        print(f"Error during AI comparison: {e}")
+        return False
 
 # Evaluate the tests
 def evaluate_tests(test_cases, assistant_id):
@@ -49,7 +73,9 @@ def evaluate_tests(test_cases, assistant_id):
         print(f"Expected: {test['expected_output']}")
         print(f"Actual: {actual_output}")
 
-        test_result = compare_outputs(test["expected_output"], actual_output, method=test.get("comparison_method", "exact"))
+        # Default to exact comparison unless specified
+        comparison_method = test.get("comparison_method", "exact")
+        test_result = compare_outputs(test["expected_output"], actual_output, method=comparison_method)
 
         if test_result:
             results.append((test['id'], "PASS"))
