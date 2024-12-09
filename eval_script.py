@@ -14,7 +14,10 @@ def load_test_cases(file_path):
 # Call the OpenAI API to get the assistant's actual response
 def get_actual_output(input_text, assistant_id):
     try:
-        response = openai.ChatCompletion.create(
+        # Initialize the OpenAI client with beta features
+        client = openai.Client()
+
+        response = client.chat.completions.create(
             assistant_id=assistant_id,
             messages=[
                 {"role": "user", "content": input_text},
@@ -26,6 +29,8 @@ def get_actual_output(input_text, assistant_id):
 
 # Compare expected and actual outputs
 def compare_outputs(expected, actual, method="exact", ai_model="gpt-4"):
+    if "ERROR:" in actual:
+        return False
     if method == "exact":
         return expected.strip().lower() == actual.strip().lower()
     elif method == "partial":
@@ -41,21 +46,26 @@ def compare_outputs(expected, actual, method="exact", ai_model="gpt-4"):
 # AI-powered comparison using OpenAI API
 def ai_comparison(expected, actual, ai_model="gpt-4"):
     try:
-        prompt = f"Compare the following two text outputs and rate their similarity on a scale from 0 to 100:\n\n" \
-                 f"Expected Output: {expected}\n\n" \
-                 f"Actual Output: {actual}\n\n" \
-                 f"Rate their similarity on a scale of 0 to 100, where 0 is completely different and 100 is exactly the same."
-        response = openai.Completion.create(
+        client = openai.Client()
+        response = client.chat.completions.create(
             model=ai_model,
-            prompt=prompt,
-            max_tokens=10,
-            temperature=0.0  # Ensure the response is deterministic
+            messages=[
+                {"role": "system", "content": "You are an assistant that evaluates the similarity of two texts."},
+                {
+                    "role": "user",
+                    "content": f"Compare the following two text outputs and rate their similarity on a scale from 0 to 100:\n\n"
+                    f"Expected Output: {expected}\n\n"
+                    f"Actual Output: {actual}\n\n"
+                    f"Only provide the numeric similarity score as an integer without any additional text.",
+                },
+            ],
+            temperature=0.0,  # Ensure the response is deterministic
         )
-        
+
         # Extract the numeric similarity score from the response
-        similarity_score = float(''.join(filter(str.isdigit, response.choices[0].text.strip())))
-        return similarity_score >= 80  # You can adjust the threshold as needed
-        
+        similarity_score = float(response["choices"][0]["message"]["content"].strip())
+        return similarity_score >= 80  # Adjust the threshold as needed
+
     except Exception as e:
         print(f"Error during AI comparison: {e}")
         return False
@@ -99,10 +109,7 @@ if __name__ == "__main__":
         print("Error: OpenAI API key not found in environment variables.")
         exit(1)
 
-    # Load test cases
-    test_cases = load_test_cases("test_cases.json")
-
-    # Evaluate test cases
+    # Evaluate the test cases
     results, pass_percentage = evaluate_tests(test_cases, assistant_id)
     print(f"Test Results: {results}")
     print(f"Overall pass percentage: {pass_percentage}%")
