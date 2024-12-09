@@ -24,9 +24,8 @@ def get_actual_output(input_text, assistant_id):
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}",
-            "OpenAI-Beta": "assistants=v2"
+            "OpenAI-Beta": "assistants=v2"  # Tells OpenAI to use Assistants API
         }
-
 
         # The request body with the input message
         payload = {
@@ -77,7 +76,7 @@ def ai_comparison(expected, actual, ai_model="gpt-4"):
             "Authorization": f"Bearer {api_key}"
         }
 
-        # The request body
+        # The request body for comparing the two outputs
         payload = {
             "model": ai_model,
             "messages": [
@@ -99,7 +98,7 @@ def ai_comparison(expected, actual, ai_model="gpt-4"):
         if response.status_code == 200:
             data = response.json()
             similarity_score = float(data["choices"][0]["message"]["content"].strip())
-            return similarity_score >= 80  # Adjust the threshold as needed
+            return similarity_score >= 80  # Adjust threshold as needed
         else:
             print(f"Error: {response.status_code} - {response.json()}")
             return False
