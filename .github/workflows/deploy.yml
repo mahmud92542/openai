@@ -65,6 +65,7 @@ jobs:
         if: success()  # Only proceed if the tests pass
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ASSISTANT_ID: ${{ secrets.ASSISTANT_ID }}
         run: |
           CONFIG_FILE="assistant_config.json"
           ASSISTANT_ID="${{ steps.extract-id.outputs.assistant_id }}"
