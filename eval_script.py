@@ -1,50 +1,26 @@
 import os
 import openai
 import json
-from difflib import SequenceMatcher
-
-# Set OpenAI API key and Assistant ID from environment variables
-openai.api_key = os.getenv("OPENAI_API_KEY")
-assistant_id = os.getenv("ASSISTANT_ID")
-
-if not openai.api_key:
-    print("Error: OPENAI_API_KEY is not found in environment variables.")
-    exit(1)
-
-if not assistant_id:
-    print("Error: ASSISTANT_ID is not found in environment variables.")
-    exit(1)
+from difflib import SequenceMatcher  # For partial match
 
 # Load test cases from a JSON file
 def load_test_cases(file_path):
     with open(file_path, "r") as f:
         return json.load(f)
 
-# Call the OpenAI API to get the assistant's actual response
+# Call the OpenAI API to get the model's actual response
 def get_actual_output(input_text):
     try:
-        # 🔍 Log the assistant model being called
-        print(f"Calling assistant model: {assistant_id}")
-        
-        # Call the assistant using the assistant ID as the model
         response = openai.ChatCompletion.create(
-            model=assistant_id,  # ✅ Use assistant ID as the model
+            model="asst_L42MN296w0C5D1fNcomfTvi1",  # Use your custom assistant model
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": input_text},
             ],
         )
-
-        # 🔍 Log the model used in the response
-        print(f"Model used in response: {response['model']}")
-
-        # 🔍 Log the full API response for debugging
-        print(f"Full API response: {json.dumps(response, indent=2)}")
-        
-        # Return the assistant's reply
         return response["choices"][0]["message"]["content"].strip()
-    except openai.error.OpenAIError as e:
-        return f"ERROR: {e.user_message}"
+    except Exception as e:
+        return f"ERROR: {e}"
 
 # Compare expected and actual outputs
 def compare_outputs(expected, actual, method="exact"):
@@ -89,6 +65,12 @@ def evaluate_tests(test_cases):
     return results, pass_percentage
 
 if __name__ == "__main__":
+    # Set OpenAI API key from environment variable
+    openai.api_key = os.getenv("OPENAI_API_KEY")
+    if not openai.api_key:
+        print("Error: OpenAI API key not found in environment variables.")
+        exit(1)
+
     # Load test cases
     test_cases = load_test_cases("test_cases.json")
 
