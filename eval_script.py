@@ -20,12 +20,13 @@ def get_actual_output(input_text, assistant_id):
             return "ERROR: OpenAI API key not found in environment variables."
 
         # Define the URL and headers
-        url = f"https://api.openai.com/v1/assistants/{assistant_id}/chat/completions"
+        url = f"https://api.openai.com/v1/assistants/{assistant_id}/completions"
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}",
             "OpenAI-Beta": "assistants=v2"
         }
+
 
         # The request body with the input message
         payload = {
