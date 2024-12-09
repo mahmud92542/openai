@@ -1,5 +1,5 @@
 import os
-import openai  # ✅ Correct import
+import openai
 import json
 from difflib import SequenceMatcher  # For partial match
 
@@ -14,10 +14,15 @@ def load_test_cases(file_path):
 # Call the OpenAI API to get the assistant's actual response
 def get_actual_output(input_text):
     try:
-        assistant_id = os.getenv("ASSISTANT_ID")  # Get the assistant ID from environment
+        # Get the assistant ID from environment
+        assistant_id = os.getenv("ASSISTANT_ID")  
         if not assistant_id:
             return "ERROR: ASSISTANT_ID is not set in the environment."
 
+        # 🔍 Log the model being called
+        print(f"Calling assistant model: ftl-{assistant_id}")
+        
+        # Call the assistant using the assistant ID
         response = openai.ChatCompletion.create(
             model=f"ftl-{assistant_id}",  # ✅ Use assistant as the model
             messages=[
@@ -25,6 +30,14 @@ def get_actual_output(input_text):
                 {"role": "user", "content": input_text},
             ],
         )
+
+        # 🔍 Log the model used in the response
+        print(f"Model used in response: {response['model']}")
+
+        # 🔍 Log the full API response
+        print(f"Full API response: {json.dumps(response, indent=2)}")
+        
+        # Return the assistant's reply
         return response["choices"][0]["message"]["content"].strip()
     except Exception as e:
         return f"ERROR: {e}"
@@ -72,6 +85,18 @@ def evaluate_tests(test_cases):
     return results, pass_percentage
 
 if __name__ == "__main__":
+    # ✅ Set OpenAI API key and Assistant ID from environment variables
+    openai.api_key = os.getenv("OPENAI_API_KEY")
+    assistant_id = os.getenv("ASSISTANT_ID")
+    
+    if not openai.api_key:
+        print("Error: OPENAI_API_KEY is not found in environment variables.")
+        exit(1)
+        
+    if not assistant_id:
+        print("Error: ASSISTANT_ID is not found in environment variables.")
+        exit(1)
+
     # Load test cases
     test_cases = load_test_cases("test_cases.json")
 
