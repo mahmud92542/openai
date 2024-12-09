@@ -8,11 +8,28 @@ def load_test_cases(file_path):
     with open(file_path, "r") as f:
         return json.load(f)
 
-# Call the OpenAI API to get the model's actual response
-def get_actual_output(input_text):
+# Retrieve your custom assistant
+def get_assistant(assistant_id):
     try:
+        # Retrieve the assistant by ID using the OpenAI API
+        client = openai.OpenAI()
+        my_assistant = client.beta.assistants.retrieve(assistant_id)
+        return my_assistant
+    except Exception as e:
+        return f"ERROR: {e}"
+
+# Call the OpenAI API to get the assistant's actual response
+def get_actual_output(input_text, assistant_id):
+    try:
+        # Retrieve the assistant using its ID
+        my_assistant = get_assistant(assistant_id)
+        
+        if "ERROR" in str(my_assistant):
+            return my_assistant  # Return the error if assistant retrieval fails
+        
+        # Use the assistant for the response generation
         response = openai.ChatCompletion.create(
-            model="asst_L42MN296w0C5D1fNcomfTvi1",  # Use your custom assistant model
+            model=my_assistant["id"],  # Use the assistant ID as the model
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": input_text},
@@ -35,14 +52,14 @@ def compare_outputs(expected, actual, method="exact"):
         raise ValueError("Unknown comparison method: Choose 'exact', 'partial', or 'similarity'.")
 
 # Evaluate the tests
-def evaluate_tests(test_cases):
+def evaluate_tests(test_cases, assistant_id):
     passed_tests = 0
     total_tests = len(test_cases)
     results = []
 
     for test in test_cases:
         print(f"Running Test: {test['id']}")
-        actual_output = get_actual_output(test["input"])
+        actual_output = get_actual_output(test["input"], assistant_id)
         print(f"Expected: {test['expected_output']}")
         print(f"Actual: {actual_output}")
 
@@ -71,10 +88,13 @@ if __name__ == "__main__":
         print("Error: OpenAI API key not found in environment variables.")
         exit(1)
 
+    # Set your assistant ID (for example, `asst_L42MN296w0C5D1fNcomfTvi1`)
+    assistant_id = "asst_L42MN296w0C5D1fNcomfTvi1"
+
     # Load test cases
     test_cases = load_test_cases("test_cases.json")
 
     # Evaluate test cases
-    results, pass_percentage = evaluate_tests(test_cases)
+    results, pass_percentage = evaluate_tests(test_cases, assistant_id)
     print(f"Test Results: {results}")
     print(f"Overall pass percentage: {pass_percentage}%")
