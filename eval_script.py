@@ -11,12 +11,17 @@ def load_test_cases(file_path):
     with open(file_path, "r") as f:
         return json.load(f)
 
-# Retrieve your custom assistant
-def get_assistant(assistant_id):
+# Call the OpenAI API to get the assistant's actual response
+def get_actual_output(input_text, assistant_id):
     try:
-        # Correct method to retrieve the assistant
-        my_assistant = openai.Assistant.retrieve(assistant_id)
-        return my_assistant
+        response = openai.ChatCompletion.create(
+            model=assistant_id,
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": input_text},
+            ],
+        )
+        return response["choices"][0]["message"]["content"].strip()
     except Exception as e:
         return f"ERROR: {e}"
 
