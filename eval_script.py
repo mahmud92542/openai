@@ -1,26 +1,47 @@
 import os
-import openai
+import requests
 import json
 from difflib import SequenceMatcher  # For partial match
 
 # Set your assistant ID at the beginning of the script
-assistant_id = "asst_7wJ5VYgMJYjTtALPHdieu7sE"  # You can also use "gpt-3.5-turbo" if that's your assistant
+assistant_id = "asst_7wJ5VYgMJYjTtALPHdieu7sE"  # Use your actual assistant ID
 
 # Load test cases from a JSON file
 def load_test_cases(file_path):
     with open(file_path, "r") as f:
         return json.load(f)
 
-# Call the OpenAI API to get the assistant's actual response
+# Call the OpenAI Assistants API to get the assistant's actual response
 def get_actual_output(input_text, assistant_id):
     try:
-        response = openai.ChatCompletion.create(
-            model=assistant_id,  # Use the assistant ID or model name
-            messages=[
-                {"role": "user", "content": input_text},
-            ],
-        )
-        return response["choices"][0]["message"]["content"].strip()
+        # Set the OpenAI API key from environment variable
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            return "ERROR: OpenAI API key not found in environment variables."
+
+        # Define the URL and headers
+        url = f"https://api.openai.com/v1/assistants/{assistant_id}/chat/completions"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+            "OpenAI-Beta": "assistants=v2"
+        }
+
+        # The request body with the input message
+        payload = {
+            "messages": [
+                {"role": "user", "content": input_text}
+            ]
+        }
+
+        # Make the POST request to the API
+        response = requests.post(url, headers=headers, json=payload)
+        
+        if response.status_code == 200:
+            data = response.json()
+            return data["choices"][0]["message"]["content"].strip()
+        else:
+            return f"ERROR: {response.status_code} - {response.json()}"
     except Exception as e:
         return f"ERROR: {e}"
 
@@ -40,12 +61,25 @@ def compare_outputs(expected, actual, method="exact", ai_model="gpt-4"):
     else:
         raise ValueError("Unknown comparison method: Choose 'exact', 'partial', 'similarity', or 'ai_comparison'.")
 
-# AI-powered comparison using OpenAI API
+# AI-powered comparison using OpenAI Assistants API
 def ai_comparison(expected, actual, ai_model="gpt-4"):
     try:
-        response = openai.ChatCompletion.create(
-            model=ai_model,  # Use the assistant ID or model name
-            messages=[
+        # Set the OpenAI API key from environment variable
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            return False
+
+        # Define the URL and headers for a chat completion request
+        url = "https://api.openai.com/v1/chat/completions"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}"
+        }
+
+        # The request body
+        payload = {
+            "model": ai_model,
+            "messages": [
                 {"role": "system", "content": "You are an assistant that evaluates the similarity of two texts."},
                 {
                     "role": "user",
@@ -53,15 +87,21 @@ def ai_comparison(expected, actual, ai_model="gpt-4"):
                     f"Expected Output: {expected}\n\n"
                     f"Actual Output: {actual}\n\n"
                     f"Only provide the numeric similarity score as an integer without any additional text.",
-                },
+                }
             ],
-            temperature=0.0,  # Ensure the response is deterministic
-        )
+            "temperature": 0.0
+        }
 
-        # Extract the numeric similarity score from the response
-        similarity_score = float(response["choices"][0]["message"]["content"].strip())
-        return similarity_score >= 80  # Adjust the threshold as needed
-
+        # Make the POST request
+        response = requests.post(url, headers=headers, json=payload)
+        
+        if response.status_code == 200:
+            data = response.json()
+            similarity_score = float(data["choices"][0]["message"]["content"].strip())
+            return similarity_score >= 80  # Adjust the threshold as needed
+        else:
+            print(f"Error: {response.status_code} - {response.json()}")
+            return False
     except Exception as e:
         print(f"Error during AI comparison: {e}")
         return False
@@ -100,8 +140,7 @@ def evaluate_tests(test_cases, assistant_id):
 
 if __name__ == "__main__":
     # Set OpenAI API key from environment variable
-    openai.api_key = os.getenv("OPENAI_API_KEY")
-    if not openai.api_key:
+    if not os.getenv("OPENAI_API_KEY"):
         print("Error: OpenAI API key not found in environment variables.")
         exit(1)
 
