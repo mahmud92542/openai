@@ -1,54 +1,32 @@
 import os
-import requests
+import openai
 import json
 from difflib import SequenceMatcher  # For partial match
 
 # Set your assistant ID at the beginning of the script
-assistant_id = "asst_7wJ5VYgMJYjTtALPHdieu7sE"  # Use your actual assistant ID
+assistant_id = "asst_7wJ5VYgMJYjTtALPHdieu7sE"  # Example assistant ID
 
 # Load test cases from a JSON file
 def load_test_cases(file_path):
     with open(file_path, "r") as f:
         return json.load(f)
 
-# Call the OpenAI Assistants API to get the assistant's actual response
+# Call the OpenAI API to get the assistant's actual response
 def get_actual_output(input_text, assistant_id):
     try:
-        # Set the OpenAI API key from environment variable
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            return "ERROR: OpenAI API key not found in environment variables."
-
-        # Define the URL and headers
-        url = f"https://api.openai.com/v1/assistants/{assistant_id}/completions"
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
-            "OpenAI-Beta": "assistants=v2"  # Tells OpenAI to use Assistants API
-        }
-
-        # The request body with the input message
-        payload = {
-            "messages": [
-                {"role": "user", "content": input_text}
-            ]
-        }
-
-        # Make the POST request to the API
-        response = requests.post(url, headers=headers, json=payload)
-        
-        if response.status_code == 200:
-            data = response.json()
-            return data["choices"][0]["message"]["content"].strip()
-        else:
-            return f"ERROR: {response.status_code} - {response.json()}"
+        response = openai.ChatCompletion.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": input_text},
+            ],
+        )
+        return response["choices"][0]["message"]["content"].strip()
     except Exception as e:
         return f"ERROR: {e}"
 
 # Compare expected and actual outputs
 def compare_outputs(expected, actual, method="exact", ai_model="gpt-4"):
-    if "ERROR:" in actual:
-        return False
     if method == "exact":
         return expected.strip().lower() == actual.strip().lower()
     elif method == "partial":
@@ -61,47 +39,24 @@ def compare_outputs(expected, actual, method="exact", ai_model="gpt-4"):
     else:
         raise ValueError("Unknown comparison method: Choose 'exact', 'partial', 'similarity', or 'ai_comparison'.")
 
-# AI-powered comparison using OpenAI Assistants API
+# AI-powered comparison using OpenAI API
 def ai_comparison(expected, actual, ai_model="gpt-4"):
     try:
-        # Set the OpenAI API key from environment variable
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            return False
+        prompt = f"Compare the following two text outputs and rate their similarity on a scale from 0 to 100:\n\n" \
+                 f"Expected Output: {expected}\n\n" \
+                 f"Actual Output: {actual}\n\n" \
+                 f"Rate their similarity on a scale of 0 to 100, where 0 is completely different and 100 is exactly the same."
 
-        # Define the URL and headers for a chat completion request
-        url = "https://api.openai.com/v1/chat/completions"
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}"
-        }
-
-        # The request body for comparing the two outputs
-        payload = {
-            "model": ai_model,
-            "messages": [
-                {"role": "system", "content": "You are an assistant that evaluates the similarity of two texts."},
-                {
-                    "role": "user",
-                    "content": f"Compare the following two text outputs and rate their similarity on a scale from 0 to 100:\n\n"
-                    f"Expected Output: {expected}\n\n"
-                    f"Actual Output: {actual}\n\n"
-                    f"Only provide the numeric similarity score as an integer without any additional text.",
-                }
-            ],
-            "temperature": 0.0
-        }
-
-        # Make the POST request
-        response = requests.post(url, headers=headers, json=payload)
+        response = openai.Completion.create(
+            model=ai_model,
+            prompt=prompt,
+            max_tokens=50,
+            temperature=0.0  # Ensure the response is deterministic
+        )
         
-        if response.status_code == 200:
-            data = response.json()
-            similarity_score = float(data["choices"][0]["message"]["content"].strip())
-            return similarity_score >= 80  # Adjust threshold as needed
-        else:
-            print(f"Error: {response.status_code} - {response.json()}")
-            return False
+        similarity_score = float(response.choices[0].text.strip())  # Extract the similarity score
+        return similarity_score >= 80  # You can adjust the threshold (e.g., 80 for "good" similarity)
+    
     except Exception as e:
         print(f"Error during AI comparison: {e}")
         return False
@@ -140,19 +95,15 @@ def evaluate_tests(test_cases, assistant_id):
 
 if __name__ == "__main__":
     # Set OpenAI API key from environment variable
-    if not os.getenv("OPENAI_API_KEY"):
+    openai.api_key = os.getenv("OPENAI_API_KEY")
+    if not openai.api_key:
         print("Error: OpenAI API key not found in environment variables.")
         exit(1)
 
     # Load test cases
-    file_path = "test_cases.json"  # Specify your JSON file path
-    if not os.path.exists(file_path):
-        print(f"Error: Test case file '{file_path}' not found.")
-        exit(1)
+    test_cases = load_test_cases("test_cases.json")
 
-    test_cases = load_test_cases(file_path)
-
-    # Evaluate the test cases
+    # Evaluate test cases
     results, pass_percentage = evaluate_tests(test_cases, assistant_id)
     print(f"Test Results: {results}")
     print(f"Overall pass percentage: {pass_percentage}%")
