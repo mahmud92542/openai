@@ -1,76 +1,62 @@
-import os
 import json
-from assistant_api_v2 import create_thread, create_run, get_thread_messages
+import os
+import time
+from openai import OpenAI
 
-# Load test cases from a JSON file
 def load_test_cases(file_path):
-    with open(file_path, "r") as f:
-        return json.load(f)
+    """Load test cases from a JSON file."""
+    with open(file_path, 'r') as file:
+        return json.load(file)
 
-# Evaluate the tests
+def ask_question_and_get_response(thread_id, question, assistant_id):
+    """Send a question to the assistant and retrieve the assistant's response."""
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        raise ValueError("OPENAI_API_KEY environment variable is not set.")
+    
+    client = OpenAI(api_key=api_key)
+    
+    # Send user message
+    client.beta.threads.messages.create(thread_id=thread_id, role="user", content=question)
+    
+    # Start the assistant's run
+    run = client.beta.threads.runs.create(thread_id=thread_id, assistant_id=assistant_id)
+    
+    while run.status in ["queued", "in_progress"]:
+        time.sleep(0.5)
+        run = client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run.id)
+    
+    if run.status == "completed":
+        messages = client.beta.threads.messages.list(thread_id=thread_id)
+        if messages.data:
+            return messages.data[-1].content
+    return None
+
 def evaluate_tests(test_cases, assistant_id):
-    passed_tests = 0
-    total_tests = len(test_cases)
+    """Evaluate test cases and compare the assistant's response to the expected answer."""
     results = []
-
-    for test in test_cases:
-        print(f"Running Test: {test['id']}")
+    total_tests = len(test_cases)
+    passed_tests = 0
+    
+    for i, test_case in enumerate(test_cases):
+        print(f"Running Test {i+1}/{total_tests}: {test_case['question']}")
         
-        thread_id = create_thread(test["input"])
-        if "ERROR" in thread_id:
-            print(thread_id)
-            continue
-
-        run_id = create_run(thread_id, assistant_id)
-        if "ERROR" in run_id:
-            print(run_id)
-            continue
-
-        messages = get_thread_messages(thread_id)
-        if isinstance(messages, str) and "ERROR" in messages:
-            print(messages)
-            continue
-
-        if not messages:
-            print(f"ERROR: No messages returned for thread {thread_id}")
-            continue
-
-        # Check if the message content is present
-        try:
-            actual_output = messages[0]["content"][0]["text"]["value"]
-        except (IndexError, KeyError) as e:
-            print(f"ERROR: Invalid message structure - {e}")
-            continue
-
-        print(f"Expected: {test['expected_output']}")
-        print(f"Actual: {actual_output}")
-
-        if test['expected_output'].strip().lower() == actual_output.strip().lower():
-            results.append((test['id'], "PASS"))
+        thread_id, _ = create_thread_and_attach_assistant(assistant_id)
+        assistant_response = ask_question_and_get_response(thread_id, test_case['question'], assistant_id)
+        
+        is_pass = assistant_response.strip() == test_case['expected_answer'].strip()
+        results.append((test_case['id'], is_pass))
+        
+        if is_pass:
             passed_tests += 1
-            print(f"{test['id']} - PASS")
-        else:
-            results.append((test['id'], "FAIL"))
-            print(f"{test['id']} - FAIL")
-
-        print("-" * 50)
-
-    pass_percentage = (passed_tests / total_tests) * 100 if total_tests > 0 else 0
-    print(f"Pass percentage: {pass_percentage}%")
+        
+    pass_percentage = (passed_tests / total_tests) * 100
+    
     return results, pass_percentage
 
 if __name__ == "__main__":
-    if not os.getenv("OPENAI_API_KEY"):
-        print("Error: OpenAI API key not found in environment variables.")
-        exit(1)
-
-    file_path = "test_cases.json"
-    if not os.path.exists(file_path):
-        print(f"Error: Test case file '{file_path}' not found.")
-        exit(1)
-
-    test_cases = load_test_cases(file_path)
-    assistant_id = "asst_7wJ5VYgMJYjTtALPHdieu7sE"
+    test_cases = load_test_cases("test_cases.json")
+    assistant_id = "asst_7wJ5VYgMJYjTtALPHdieu7sE"  # Replace with your assistant ID
     results, pass_percentage = evaluate_tests(test_cases, assistant_id)
     print(f"Test Results: {results}")
-    print(f"Overall pass percentage: {pass_percentage}%")
+    print(f"Pass Percentage: {pass_percentage}%")
