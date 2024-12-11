@@ -1,65 +1,126 @@
 import os
-import openai
+import time
+import requests
 import json
 from difflib import SequenceMatcher  # For partial match
 
 # Set your assistant ID at the beginning of the script
-assistant_id = "asst_7wJ5VYgMJYjTtALPHdieu7sE"  # Example assistant ID
+assistant_id = "asst_7wJ5VYgMJYjTtALPHdieu7sE"  # Use your actual assistant ID
 
 # Load test cases from a JSON file
 def load_test_cases(file_path):
     with open(file_path, "r") as f:
         return json.load(f)
 
-# Call the OpenAI API to get the assistant's actual response
-def get_actual_output(input_text, assistant_id):
+# Create a thread for the assistant to interact with
+def create_thread(input_text):
     try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": input_text},
-            ],
-        )
-        return response["choices"][0]["message"]["content"].strip()
+        # Set the OpenAI API key from environment variable
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            return "ERROR: OpenAI API key not found in environment variables."
+
+        # Define the URL and headers
+        url = "https://api.openai.com/v1/threads"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}"
+        }
+
+        # The request body to create a thread
+        payload = {
+            "messages": [
+                {"role": "user", "content": input_text}
+            ]
+        }
+
+        # Make the POST request to create a thread
+        response = requests.post(url, headers=headers, json=payload)
+        
+        if response.status_code == 201:
+            data = response.json()
+            return data["id"]  # Return the thread ID
+        else:
+            return f"ERROR: {response.status_code} - {response.json()}"
     except Exception as e:
         return f"ERROR: {e}"
 
-# Compare expected and actual outputs
-def compare_outputs(expected, actual, method="exact", ai_model="gpt-4"):
-    if method == "exact":
-        return expected.strip().lower() == actual.strip().lower()
-    elif method == "partial":
-        return expected.strip().lower() in actual.strip().lower()
-    elif method == "similarity":
-        similarity = SequenceMatcher(None, expected.strip().lower(), actual.strip().lower()).ratio()
-        return similarity > 0.7
-    elif method == "ai_comparison":
-        return ai_comparison(expected, actual, ai_model)
-    else:
-        raise ValueError("Unknown comparison method: Choose 'exact', 'partial', 'similarity', or 'ai_comparison'.")
-
-# AI-powered comparison using OpenAI API
-def ai_comparison(expected, actual, ai_model="gpt-4"):
+# Create a run to process the thread and assistant's response
+def create_run(thread_id, assistant_id):
     try:
-        prompt = f"Compare the following two text outputs and rate their similarity on a scale from 0 to 100:\n\n" \
-                 f"Expected Output: {expected}\n\n" \
-                 f"Actual Output: {actual}\n\n" \
-                 f"Rate their similarity on a scale of 0 to 100, where 0 is completely different and 100 is exactly the same."
+        # Set the OpenAI API key from environment variable
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            return "ERROR: OpenAI API key not found in environment variables."
 
-        response = openai.Completion.create(
-            model=ai_model,
-            prompt=prompt,
-            max_tokens=50,
-            temperature=0.0  # Ensure the response is deterministic
-        )
+        # Define the URL and headers
+        url = f"https://api.openai.com/v1/threads/{thread_id}/runs"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}"
+        }
+
+        # The request body to create a run
+        payload = {"assistant_id": assistant_id}
+
+        # Make the POST request to create a run
+        response = requests.post(url, headers=headers, json=payload)
         
-        similarity_score = float(response.choices[0].text.strip())  # Extract the similarity score
-        return similarity_score >= 80  # You can adjust the threshold (e.g., 80 for "good" similarity)
-    
+        if response.status_code == 201:
+            data = response.json()
+            return data["id"]  # Return the run ID
+        else:
+            return f"ERROR: {response.status_code} - {response.json()}"
     except Exception as e:
-        print(f"Error during AI comparison: {e}")
-        return False
+        return f"ERROR: {e}"
+
+# Wait for the run to complete
+def wait_for_run(thread_id, run_id):
+    try:
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            return "ERROR: OpenAI API key not found in environment variables."
+
+        url = f"https://api.openai.com/v1/threads/{thread_id}/runs/{run_id}"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}"
+        }
+
+        while True:
+            response = requests.get(url, headers=headers)
+            if response.status_code == 200:
+                data = response.json()
+                status = data["status"]
+                if status == "completed":
+                    return "completed"
+                elif status in ["failed", "cancelled"]:
+                    return f"ERROR: {status}"
+            time.sleep(0.5)  # Wait before checking again
+    except Exception as e:
+        return f"ERROR: {e}"
+
+# Get all messages from the thread
+def get_thread_messages(thread_id):
+    try:
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            return "ERROR: OpenAI API key not found in environment variables."
+
+        url = f"https://api.openai.com/v1/threads/{thread_id}/messages"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}"
+        }
+
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            return data["data"]  # Return the list of messages
+        else:
+            return f"ERROR: {response.status_code} - {response.json()}"
+    except Exception as e:
+        return f"ERROR: {e}"
 
 # Evaluate the tests
 def evaluate_tests(test_cases, assistant_id):
@@ -69,15 +130,29 @@ def evaluate_tests(test_cases, assistant_id):
 
     for test in test_cases:
         print(f"Running Test: {test['id']}")
-        actual_output = get_actual_output(test["input"], assistant_id)
+        
+        thread_id = create_thread(test["input"])
+        if "ERROR" in thread_id:
+            print(thread_id)
+            continue
+
+        run_id = create_run(thread_id, assistant_id)
+        if "ERROR" in run_id:
+            print(run_id)
+            continue
+
+        wait_status = wait_for_run(thread_id, run_id)
+        if "ERROR" in wait_status:
+            print(wait_status)
+            continue
+
+        messages = get_thread_messages(thread_id)
+        actual_output = messages[0]["content"][0]["text"]["value"]
+        
         print(f"Expected: {test['expected_output']}")
         print(f"Actual: {actual_output}")
 
-        # Default to exact comparison unless specified
-        comparison_method = test.get("comparison_method", "exact")
-        test_result = compare_outputs(test["expected_output"], actual_output, method=comparison_method)
-
-        if test_result:
+        if test['expected_output'].strip().lower() == actual_output.strip().lower():
             results.append((test['id'], "PASS"))
             passed_tests += 1
             print(f"{test['id']} - PASS")
@@ -87,23 +162,21 @@ def evaluate_tests(test_cases, assistant_id):
 
         print("-" * 50)
 
-    # Calculate pass percentage
     pass_percentage = (passed_tests / total_tests) * 100
     print(f"Pass percentage: {pass_percentage}%")
-
     return results, pass_percentage
 
 if __name__ == "__main__":
-    # Set OpenAI API key from environment variable
-    openai.api_key = os.getenv("OPENAI_API_KEY")
-    if not openai.api_key:
+    if not os.getenv("OPENAI_API_KEY"):
         print("Error: OpenAI API key not found in environment variables.")
         exit(1)
 
-    # Load test cases
-    test_cases = load_test_cases("test_cases.json")
+    file_path = "test_cases.json"
+    if not os.path.exists(file_path):
+        print(f"Error: Test case file '{file_path}' not found.")
+        exit(1)
 
-    # Evaluate test cases
+    test_cases = load_test_cases(file_path)
     results, pass_percentage = evaluate_tests(test_cases, assistant_id)
     print(f"Test Results: {results}")
     print(f"Overall pass percentage: {pass_percentage}%")
