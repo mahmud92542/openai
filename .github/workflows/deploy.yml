@@ -2,8 +2,8 @@ name: Deploy Assistant to OpenAI
 
 on:
   push:
-    branches:
-      - main
+    paths:
+      - main.txt
 
 jobs:
   # 1. Install dependencies and cache them
