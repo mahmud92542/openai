@@ -81,6 +81,9 @@ jobs:
         with:
           python-version: 3.12
 
+      - name: Set up OpenAI API Key
+        run: echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> $GITHUB_ENV
+
       - name: Restore cached dependencies
         uses: actions/cache@v3
         with:
