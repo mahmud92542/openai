@@ -32,8 +32,21 @@ def evaluate_tests(test_cases, assistant_id):
             continue
 
         messages = get_thread_messages(thread_id)
-        actual_output = messages[0]["content"][0]["text"]["value"]
-        
+        if isinstance(messages, str) and "ERROR" in messages:
+            print(messages)
+            continue
+
+        if not messages:
+            print(f"ERROR: No messages returned for thread {thread_id}")
+            continue
+
+        # Check if the message content is present
+        try:
+            actual_output = messages[0]["content"][0]["text"]["value"]
+        except (IndexError, KeyError) as e:
+            print(f"ERROR: Invalid message structure - {e}")
+            continue
+
         print(f"Expected: {test['expected_output']}")
         print(f"Actual: {actual_output}")
 
@@ -47,7 +60,7 @@ def evaluate_tests(test_cases, assistant_id):
 
         print("-" * 50)
 
-    pass_percentage = (passed_tests / total_tests) * 100
+    pass_percentage = (passed_tests / total_tests) * 100 if total_tests > 0 else 0
     print(f"Pass percentage: {pass_percentage}%")
     return results, pass_percentage
 
