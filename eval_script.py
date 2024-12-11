@@ -1,6 +1,6 @@
 import os
 import json
-from assistant_api_v2 import create_thread, create_run, wait_for_run, get_thread_messages
+from assistant_api_v2 import create_thread, create_run, get_thread_messages
 
 # Load test cases from a JSON file
 def load_test_cases(file_path):
@@ -24,11 +24,6 @@ def evaluate_tests(test_cases, assistant_id):
         run_id = create_run(thread_id, assistant_id)
         if "ERROR" in run_id:
             print(run_id)
-            continue
-
-        wait_status = wait_for_run(thread_id, run_id)
-        if "ERROR" in wait_status:
-            print(wait_status)
             continue
 
         messages = get_thread_messages(thread_id)
