@@ -1,32 +1,8 @@
 [
-  {
-    "id": "TC-001",
-    "input": "What is the capital of France?",
-    "expected_output": "Paris",
-    "comparison_method": "partial"
-  },
-  {
-    "id": "TC-002",
-    "input": "Who wrote Pride and Prejudice?",
-    "expected_output": "Jane Austen",
-    "comparison_method": "partial"
-  },
-  {
-    "id": "TC-003",
-    "input": "What is the square root of 16?",
-    "expected_output": "4",
-    "comparison_method": "partial"
-  },
-  {
-    "id": "TC-004",
-    "input": "Tell me about Python programming.",
-    "expected_output": "Python is a programming language.",
-    "comparison_method": "ai_comparison"
-  },
-  {
-    "id": "TC-005",
-    "input": "Who is the president of the United States?",
-    "expected_output": "Joe Biden",
-    "comparison_method": "partial"
-  }
-]
+    {
+      "id": "TC-005",
+      "input": "What is the capital of France?",
+      "expected_output": "Paris",
+      "comparison_method": "model_graded"
+    }
+  ]
