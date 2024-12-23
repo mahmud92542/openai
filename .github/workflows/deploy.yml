@@ -6,8 +6,7 @@ on:
       - main
 
 jobs:
-  # 1. Install dependencies and cache them
-  install-dependencies:
+  deploy-assistant:
     runs-on: ubuntu-latest
 
     steps:
@@ -17,7 +16,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: 3.12
+          python-version: 3.12  # Set the Python version you want to use
 
       - name: Install dependencies
         run: |
@@ -25,109 +24,15 @@ jobs:
           pip install -r requirements.txt
           pip install pytest openai
 
-      - name: Cache dependencies
-        uses: actions/cache@v3
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-  # 2. Run assistant script (assistant_api_v2.py)
-  run-assistant:
-    runs-on: ubuntu-latest
-    needs: install-dependencies  # Wait for dependencies to be installed
-
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: 3.12
-
-      - name: Restore cached dependencies
-        uses: actions/cache@v3
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
       - name: Set up OpenAI API Key
         run: echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> $GITHUB_ENV
-
-      - name: Run Assistant Script
-        run: |
-          python assistant_api_v2.py
-
-  # 3. Run tests (test_eval_script.py)
-  run-tests:
-    runs-on: ubuntu-latest
-    needs: run-assistant  # Wait for assistant script to run
-
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: 3.12
-
-      - name: Set up OpenAI API Key
-        run: echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> $GITHUB_ENV
-
-      - name: Restore cached dependencies
-        uses: actions/cache@v3
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
 
       - name: Run Tests
         run: |
           python3 -m venv venv
           source venv/bin/activate
           pip install -r requirements.txt
-          pytest test_eval_script.py  # Run tests
-
-  # 4. Extract and update assistant on OpenAI
-  update-assistant:
-    runs-on: ubuntu-latest
-    needs: run-tests  # Wait for tests to pass before updating the assistant
-
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: 3.12
-
-      - name: Restore cached dependencies
-        uses: actions/cache@v3
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-      - name: Set up OpenAI API Key
-        run: echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> $GITHUB_ENV
+          pytest test_eval_script.py  # Run pytest to execute your test cases
 
       - name: Extract Assistant ID
         id: extract-id
@@ -139,21 +44,23 @@ jobs:
             exit 1
           fi
 
+          # Validate JSON format
           if ! jq empty "$CONFIG_FILE"; then
             echo "Invalid JSON format in $CONFIG_FILE"
             exit 1
           fi
 
+          # Extract assistant ID
           ASSISTANT_ID=$(jq -r '.id // empty' "$CONFIG_FILE")
           if [ -z "$ASSISTANT_ID" ]; then
             echo "Assistant ID not found in $CONFIG_FILE. Exiting."
             exit 1
           fi
 
-          echo "::set-output name=assistant_id::$ASSISTANT_ID" 
+          echo "::set-output name=assistant_id::$ASSISTANT_ID" # Pass it as a GitHub Actions output
 
       - name: Update Assistant on OpenAI
-        if: success()
+        if: success()  # Only proceed if the tests pass
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
@@ -161,11 +68,14 @@ jobs:
           ASSISTANT_ID="${{ steps.extract-id.outputs.assistant_id }}"
           API_URL="https://api.openai.com/v1/assistants/$ASSISTANT_ID"
 
+          # Extract relevant fields for update
           jq '{instructions, tools, model}' "$CONFIG_FILE" > temp_config.json
 
+          # Debugging: Display payload
           echo "Payload being sent:"
           cat temp_config.json
 
+          # Execute cURL command
           RESPONSE=$(curl -s -o response.json -w "%{http_code}" \
             -X POST \
             -H "Content-Type: application/json" \
@@ -174,6 +84,7 @@ jobs:
             -d @temp_config.json \
             "$API_URL")
 
+          # Check response status
           if [ "$RESPONSE" -eq 200 ]; then
             echo "Assistant successfully updated!"
             cat response.json
