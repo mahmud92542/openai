@@ -1,8 +1,8 @@
 [
     {
       "id": "TC-001",
-      "input": "What kind of code is this, print('hello workd')",
-      "expected_output": "Python",
+      "input": "What kind of code is this, print('hello world')",
+      "expected_output": "This code is written in Python.",
       "comparison_method": "model_graded"
     },
     {
