@@ -1,8 +1,23 @@
 [
     {
-      "id": "TC-005",
-      "input": "What is the capital of France?",
-      "expected_output": "Paris",
+      "id": "TC-001",
+      "input": "What type of code is this, def add_numbers(num1, num2):
+  """
+  This function adds two numbers together.
+
+  Args:
+    num1: The first number.
+    num2: The second number.
+
+  Returns:
+    The sum of num1 and num2.
+  """
+  return num1 + num2
+
+# Example usage:
+result = add_numbers(5, 3)
+print(f"The sum of 5 and 3 is: {result}")  # Output: The sum of 5 and 3 is: 8",
+      "expected_output": "Python",
       "comparison_method": "model_graded"
     }
   ]
