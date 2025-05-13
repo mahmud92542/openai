@@ -31,7 +31,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ASSISTANT_ID: ${{ secrets.DEV_ASSISTANT_ID }}
         run: |
-          CONFIG_FILE="productai_assistant_config.json"
+          CONFIG_FILE="assistant_config.json"
           API_URL="https://api.openai.com/v1/assistants/$ASSISTANT_ID"
 
           jq '{instructions, tools, model}' "$CONFIG_FILE" > temp_config.json
@@ -108,7 +108,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ASSISTANT_ID: ${{ secrets.PROD_ASSISTANT_ID }}
         run: |
-          CONFIG_FILE="productai_assistant_config.json"
+          CONFIG_FILE="assistant_config.json"
           API_URL="https://api.openai.com/v1/assistants/$ASSISTANT_ID"
 
           jq '{instructions, tools, model}' "$CONFIG_FILE" > temp_config.json
