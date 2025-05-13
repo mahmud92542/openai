@@ -1,8 +1,9 @@
 {
+  "object": "assistant",
   "name": "mahmud's_assistant",
   "description": "This is my assistant",
   "model": "gpt-4o",
-  "instructions": "Provide an overview of the specified technical topics, like DevOps, MLOps, Data Engineering. Thank You!)",
+  "instructions": "Provide an overview of the specified technical topics, like DevOps, MLOps, Data Engineering. Thank you! I hope everything will be better.)",
   "tools": [],
   "top_p": 1.0,
   "temperature": 1.0,
