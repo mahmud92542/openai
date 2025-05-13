@@ -6,76 +6,36 @@ on:
       - main
 
 jobs:
-  deploy-assistant:
+  deploy-dev:
+    name: Deploy to Dev
     runs-on: ubuntu-latest
+    environment: development
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout code
         uses: actions/checkout@v3
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: 3.12  # Set the Python version you want to use
+          python-version: 3.12
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest openai
+          pip install openai jq
 
-      - name: Set up OpenAI API Key
-        run: echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> $GITHUB_ENV
-
-      - name: Run Tests
-        run: |
-          python3 -m venv venv
-          source venv/bin/activate
-          pip install -r requirements.txt
-          pytest test_eval_script.py  # Run pytest to execute your test cases
-
-      - name: Extract Assistant ID
-        id: extract-id
-        run: |
-          CONFIG_FILE="assistant_config.json"
-
-          if [ ! -f "$CONFIG_FILE" ]; then
-            echo "Configuration file not found!"
-            exit 1
-          fi
-
-          # Validate JSON format
-          if ! jq empty "$CONFIG_FILE"; then
-            echo "Invalid JSON format in $CONFIG_FILE"
-            exit 1
-          fi
-
-          # Extract assistant ID
-          ASSISTANT_ID=$(jq -r '.id // empty' "$CONFIG_FILE")
-          if [ -z "$ASSISTANT_ID" ]; then
-            echo "Assistant ID not found in $CONFIG_FILE. Exiting."
-            exit 1
-          fi
-
-          echo "::set-output name=assistant_id::$ASSISTANT_ID" # Pass it as a GitHub Actions output
-
-      - name: Update Assistant on OpenAI
-        if: success()  # Only proceed if the tests pass
+      - name: Deploy Assistant to Dev
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ASSISTANT_ID: ${{ secrets.DEV_ASSISTANT_ID }}
         run: |
-          CONFIG_FILE="assistant_config.json"
-          ASSISTANT_ID="${{ steps.extract-id.outputs.assistant_id }}"
+          CONFIG_FILE="productai_assistant_config.json"
           API_URL="https://api.openai.com/v1/assistants/$ASSISTANT_ID"
 
-          # Extract relevant fields for update
           jq '{instructions, tools, model}' "$CONFIG_FILE" > temp_config.json
 
-          # Debugging: Display payload
-          echo "Payload being sent:"
-          cat temp_config.json
-
-          # Execute cURL command
           RESPONSE=$(curl -s -o response.json -w "%{http_code}" \
             -X POST \
             -H "Content-Type: application/json" \
@@ -84,12 +44,88 @@ jobs:
             -d @temp_config.json \
             "$API_URL")
 
-          # Check response status
           if [ "$RESPONSE" -eq 200 ]; then
-            echo "Assistant successfully updated!"
+            echo "Dev update successful!"
             cat response.json
           else
-            echo "Failed to update assistant. HTTP Status: $RESPONSE"
+            echo "Dev update failed: $RESPONSE"
+            cat response.json
+            exit 1
+          fi
+
+  run-tests:
+    name: Run Tests
+    needs: deploy-dev
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.12
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Run Tests
+        run: |
+          python3 -m venv venv
+          source venv/bin/activate
+          pip install -r requirements.txt
+          pytest test_eval_script.py
+
+  deploy-prod:
+    name: Deploy to Prod
+    needs: run-tests
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      # Manual approval required via GitHub Environments
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.12
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install openai jq
+
+      - name: Deploy Assistant to Prod
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ASSISTANT_ID: ${{ secrets.PROD_ASSISTANT_ID }}
+        run: |
+          CONFIG_FILE="productai_assistant_config.json"
+          API_URL="https://api.openai.com/v1/assistants/$ASSISTANT_ID"
+
+          jq '{instructions, tools, model}' "$CONFIG_FILE" > temp_config.json
+
+          RESPONSE=$(curl -s -o response.json -w "%{http_code}" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $OPENAI_API_KEY" \
+            -H "OpenAI-Beta: assistants=v2" \
+            -d @temp_config.json \
+            "$API_URL")
+
+          if [ "$RESPONSE" -eq 200 ]; then
+            echo "Prod update successful!"
+            cat response.json
+          else
+            echo "Prod update failed: $RESPONSE"
             cat response.json
             exit 1
           fi
