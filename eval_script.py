@@ -13,7 +13,7 @@ def load_test_cases(file_path):
     with open(file_path, "r") as f:
         return json.load(f)
 
-def get_actual_output(input_text, assistant_id="asst_7wJ5VYgMJYjTtALPHdieu7sE"):
+def get_actual_output(input_text, assistant_id="asst_wBUiDA0UZsZ1jgIJDnNzgX4W"):
     try:
         openai_client = OpenAI()
         logging.info(f"Requesting actual output for input: {input_text}")
@@ -138,7 +138,7 @@ def model_graded(expected_output, actual_output):
         logging.error(f"General Error: {e}")
         return False
 
-def evaluate_tests(test_cases, assistant_id="asst_7wJ5VYgMJYjTtALPHdieu7sE"):
+def evaluate_tests(test_cases, assistant_id="asst_wBUiDA0UZsZ1jgIJDnNzgX4W"):
     passed_tests = 0
     total_tests = len(test_cases)
     results = []
