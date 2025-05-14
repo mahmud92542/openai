@@ -21,9 +21,10 @@ jobs:
           ASSISTANT_ID: ${{ secrets.DEV_ASSISTANT_ID }}
         run: |
           CONFIG_FILE="assistant_config.json"
+          INSTRUCTIONS=$(cat instructions.txt | jq -Rs .)
           API_URL="https://api.openai.com/v1/assistants/$ASSISTANT_ID"
 
-          jq '{instructions, tools, model}' "$CONFIG_FILE" > temp_config.json
+          jq --arg instr "$INSTRUCTIONS" '.instructions = $instr | {instructions, tools, model}' "$CONFIG_FILE" > temp_config.json
 
           RESPONSE=$(curl -s -o response.json -w "%{http_code}" \
             -X POST \
@@ -90,9 +91,10 @@ jobs:
           ASSISTANT_ID: ${{ secrets.PROD_ASSISTANT_ID }}
         run: |
           CONFIG_FILE="assistant_config.json"
+          INSTRUCTIONS=$(cat instructions.txt | jq -Rs .)
           API_URL="https://api.openai.com/v1/assistants/$ASSISTANT_ID"
 
-          jq '{instructions, tools, model}' "$CONFIG_FILE" > temp_config.json
+          jq --arg instr "$INSTRUCTIONS" '.instructions = $instr | {instructions, tools, model}' "$CONFIG_FILE" > temp_config.json
 
           RESPONSE=$(curl -s -o response.json -w "%{http_code}" \
             -X POST \
