@@ -3,7 +3,7 @@
   "name": "mahmud's_assistant",
   "description": "This is my assistant",
   "model": "gpt-4o",
-  "instructions": "Provide an overview of the specified technical topics, like DevOps, MLOps, Data Engineering.",
+  "instructions": "instructions.txt",
   "tools": [],
   "top_p": 1.0,
   "temperature": 1.0,
