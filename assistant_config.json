@@ -3,7 +3,7 @@
   "name": "mahmud's_assistant",
   "description": "This is my assistant",
   "model": "gpt-4o",
-  "instructions": "instructions.txt",
+  "instructions": "__INSTRUCTIONS__",
   "tools": [],
   "top_p": 1.0,
   "temperature": 1.0,
