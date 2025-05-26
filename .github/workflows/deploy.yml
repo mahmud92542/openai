@@ -186,7 +186,6 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: production # This links to your GitHub Environment for manual approvals
-      url: https://api.openai.com/v1/assistants/${{ secrets.PROD_ASSISTANT_ID }} # Optional: URL to show in GitHub UI
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
