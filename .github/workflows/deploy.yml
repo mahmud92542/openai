@@ -10,14 +10,15 @@ jobs:
     name: Create Temporary Assistant for Testing
     runs-on: ubuntu-latest
     outputs:
-      assistant_id: ${{ steps.set-assistant-output.outputs.assistant_id }} # Output from the new dedicated step
+      # This now references the new dedicated output step
+      assistant_id: ${{ steps.set-assistant-output.outputs.assistant_id }} 
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
       - name: Create Temporary Assistant and Capture ID
-        id: create-assistant-process # Renamed this ID to reflect its role
+        id: create-assistant-process # Renamed this ID to reflect its primary role
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
@@ -90,7 +91,8 @@ jobs:
             cat response.json
             echo "--- End OpenAI API response ---"
             
-            # Export the ID so the next step can use it
+            # Export the ID so the next step (set-assistant-output) can use it
+            # This makes the variable available to subsequent steps in the *same job*
             echo "ASSISTANT_ID_FOR_OUTPUT=$ASSISTANT_ID_FINAL" >> $GITHUB_ENV 
             echo "--- Debug: ASSISTANT_ID_FOR_OUTPUT exported to GITHUB_ENV ---"
 
@@ -100,9 +102,10 @@ jobs:
             exit 1
           fi
 
-      - name: Set Assistant ID as Job Output
-        id: set-assistant-output # This is the ID referenced in job.outputs
+      - name: Set Assistant ID as Job Output # New dedicated step for setting output
+        id: set-assistant-output # This is the ID referenced in job.outputs: assistant_id
         run: |
+          # Use the environment variable set by the previous step
           echo "assistant_id=${{ env.ASSISTANT_ID_FOR_OUTPUT }}" >> $GITHUB_OUTPUT
           echo "--- Debug: Final assistant_id output to job: ${{ env.ASSISTANT_ID_FOR_OUTPUT }} ---"
 
