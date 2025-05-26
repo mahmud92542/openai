@@ -4,13 +4,7 @@ on:
   push:
     branches:
       - main
-    paths: # Trigger only when assistant_config.json or instructions.txt changes
-      - 'assistant_config.json'
-      - 'instructions.txt'
-      - 'eval_script.py'
-      - 'test_cases.json'
-      - '.github/workflows/actions.yml' # Also trigger if the workflow file itself changes
-
+      
 jobs:
   create-temp-assistant:
     name: Create Temporary Assistant for Testing
