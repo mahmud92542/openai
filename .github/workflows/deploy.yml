@@ -3,15 +3,16 @@ name: Assistant CI/CD Pipeline
 on:
   push:
     branches:
-      - main
+      - main # This will trigger the full pipeline, including deploy-prod after merge
+  pull_request:
+    branches:
+      - main # This will trigger only the CI part (temp assistant, tests, cleanup)
 
 jobs:
   create-temp-assistant:
     name: Create Temporary Assistant for Testing
     runs-on: ubuntu-latest
     outputs:
-      # While artifacts are used for robust transfer, keeping this output
-      # can still be useful for general workflow overview in GitHub UI.
       assistant_id: ${{ steps.create-assistant-process.outputs.assistant_id }}
 
     steps:
@@ -125,7 +126,7 @@ jobs:
           pip install -r requirements.txt
           python eval_script.py
 
-        continue-on-error: true
+        continue-on-error: true # Important: Allows the cleanup job to run even if tests fail
 
   delete-temp-assistant:
     name: Delete Temporary Assistant
@@ -181,10 +182,11 @@ jobs:
     # Since 'delete-temp-assistant' will fail if deletion doesn't occur,
     # this ensures the deployment only happens if cleanup was successful.
     needs: delete-temp-assistant
-    if: success() # Only proceed if the 'delete-temp-assistant' job passed
+    if: github.event_name == 'push' && success() # Only proceed if it's a push to main AND previous jobs passed
     runs-on: ubuntu-latest
     environment:
-      name: production
+      name: production # This links to your GitHub Environment for manual approvals
+      url: https://api.openai.com/v1/assistants/${{ secrets.PROD_ASSISTANT_ID }} # Optional: URL to show in GitHub UI
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
