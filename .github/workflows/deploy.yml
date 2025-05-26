@@ -180,7 +180,6 @@ jobs:
             # Fail the job if cleanup itself fails
             exit 1 
           fi
-
   deploy-prod:
     name: Deploy to Prod
     needs: run-tests # This job now directly depends on the tests passing
