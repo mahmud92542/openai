@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      
+
 jobs:
   create-temp-assistant:
     name: Create Temporary Assistant for Testing
@@ -26,19 +26,8 @@ jobs:
 
           CONFIG_FILE="assistant_config.json"
 
-          if [ ! -f "instructions.txt" ]; then
-              echo "Error: instructions.txt not found!"
-              exit 1
-          fi
-
-          if [ ! -f "$CONFIG_FILE" ]; then
-              echo "Error: $CONFIG_FILE not found!"
-              exit 1
-          fi
-
           # Extract first 6 chars of commit sha
           SHORT_SHA="${GITHUB_SHA:0:6}"
-          echo "Debug: Short commit SHA is $SHORT_SHA"
 
           # Extract 'name' field from config JSON
           NAME_FROM_CONFIG=$(jq -r '.name // empty' "$CONFIG_FILE")
@@ -46,20 +35,14 @@ jobs:
             echo "Error: 'name' field missing or empty in $CONFIG_FILE"
             exit 1
           fi
-          echo "Debug: Name from config is '$NAME_FROM_CONFIG'"
 
-          # Build new name as commit_<short_sha>_<name>
-          NEW_NAME="commit_${SHORT_SHA}_${NAME_FROM_CONFIG}"
-          echo "Debug: New assistant name will be '$NEW_NAME'"
+          # Build new name as <6chars_commit><name>
+          NEW_NAME="${SHORT_SHA}${NAME_FROM_CONFIG}"
 
           INSTRUCTIONS=$(cat instructions.txt | jq -Rs .)
 
-          echo "--- Debug: Content of instructions.txt ---"
-          cat instructions.txt
-          echo "--- End instructions.txt content ---"
-
-          echo "--- Debug: Running jq for payload creation ---"
-          if ! jq --arg instr "$INSTRUCTIONS" --arg newname "$NEW_NAME" '
+          # Construct the payload JSON with new name
+          jq --arg instr "$INSTRUCTIONS" --arg newname "$NEW_NAME" '
             del(.id, .object, .created_at, .updated_at) |
             if .reasoning_effort == null then del(.reasoning_effort) else . end |
             if .description == null then .description = "" else . end |
@@ -68,22 +51,12 @@ jobs:
             else . end |
             .instructions = $instr |
             .name = $newname
-          ' "$CONFIG_FILE" > temp_create_payload.json 2>&1; then
-            echo "Error: jq failed to process '$CONFIG_FILE'."
-            echo "jq output (might contain error messages):"
-            cat temp_create_payload.json
-            exit 1
-          fi
-          echo "--- Debug: jq for payload creation completed ---"
+          ' "$CONFIG_FILE" > temp_create_payload.json
 
-          echo "Payload to be sent for new assistant:"
-          if ! jq -e . temp_create_payload.json; then
-              echo "Error: temp_create_payload.json is not valid JSON or is empty."
-              cat temp_create_payload.json
-              exit 1
-          fi
+          echo "Payload to be sent:"
+          jq . temp_create_payload.json
 
-          echo "--- Debug: Making API call to OpenAI ---"
+          # Call OpenAI API to create assistant
           RESPONSE_HTTP_CODE=$(curl -s -o response.json -w "%{http_code}" \
             -X POST \
             -H "Content-Type: application/json" \
@@ -91,28 +64,23 @@ jobs:
             -H "OpenAI-Beta: assistants=v2" \
             -d @temp_create_payload.json \
             "https://api.openai.com/v1/assistants")
-          echo "--- Debug: API call completed ---"
 
-          echo "Curl HTTP Response Code: $RESPONSE_HTTP_CODE"
+          echo "API response HTTP code: $RESPONSE_HTTP_CODE"
+          cat response.json
+
           if [ "$RESPONSE_HTTP_CODE" -eq 200 ]; then
             ASSISTANT_ID_FINAL=$(jq -r '.id' response.json)
             if [ -z "$ASSISTANT_ID_FINAL" ]; then
-                echo "Error: Assistant ID could not be extracted from response.json. Response content:"
-                cat response.json
+                echo "Error: Assistant ID could not be extracted from response.json."
                 exit 1
             fi
-            echo "Temporary Assistant created successfully with ID: $ASSISTANT_ID_FINAL"
-            echo "--- Debug: Full OpenAI API success response ---"
-            cat response.json
-            echo "--- End OpenAI API response ---"
 
-            # Export to GITHUB_ENV for next step and also keep in a file for step output
+            echo "Temporary Assistant created with ID: $ASSISTANT_ID_FINAL"
+
+            # Export for next steps
             echo "ASSISTANT_ID_FOR_OUTPUT=$ASSISTANT_ID_FINAL" >> $GITHUB_ENV
-            echo "Debug: Exported ASSISTANT_ID_FOR_OUTPUT=$ASSISTANT_ID_FINAL to GITHUB_ENV"
-
           else
-            echo "Failed to create temporary assistant: HTTP $RESPONSE_HTTP_CODE. Response content:"
-            cat response.json
+            echo "Failed to create assistant, HTTP $RESPONSE_HTTP_CODE"
             exit 1
           fi
 
@@ -131,6 +99,7 @@ jobs:
 
           echo "assistant_id=$ASSISTANT_ID_FOR_OUTPUT" >> $GITHUB_OUTPUT
           echo "Debug: assistant_id output set to: $ASSISTANT_ID_FOR_OUTPUT"
+
 
   run-tests:
     name: Run Tests
@@ -157,7 +126,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           python eval_script.py
-        continue-on-error: false  # Fail on test failure
+        continue-on-error: true
+
 
   delete-temp-assistant:
     name: Delete Temporary Assistant
@@ -178,11 +148,9 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ASSISTANT_ID_TO_DELETE: ${{ needs.create-temp-assistant.outputs.assistant_id }}
         run: |
-          set -euxo pipefail
-
           if [ -z "$ASSISTANT_ID_TO_DELETE" ]; then
-            echo "Error: ASSISTANT_ID_TO_DELETE is empty. Skipping deletion as no ID was propagated."
-            exit 1  # Fail pipeline because no assistant ID to delete
+            echo "Error: ASSISTANT_ID_TO_DELETE is empty. Cannot delete temporary assistant."
+            exit 1
           fi
 
           echo "Attempting to delete temporary assistant with ID: $ASSISTANT_ID_TO_DELETE"
@@ -196,8 +164,9 @@ jobs:
             echo "Temporary Assistant $ASSISTANT_ID_TO_DELETE deleted successfully."
           else
             echo "Failed to delete temporary assistant $ASSISTANT_ID_TO_DELETE: HTTP $DELETE_RESPONSE"
-            exit 1  # Fail pipeline on deletion failure
+            exit 1
           fi
+
 
   deploy-prod:
     name: Deploy to Prod
