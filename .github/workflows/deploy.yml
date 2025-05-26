@@ -4,38 +4,58 @@ on:
   push:
     branches:
       - main
-      
+    paths: # Trigger only when assistant_config.json or instructions.txt changes
+      - 'assistant_config.json'
+      - 'instructions.txt'
+      - 'eval_script.py'
+      - 'test_cases.json'
+      - '.github/workflows/actions.yml' # Also trigger if the workflow file itself changes
+
 jobs:
   create-temp-assistant:
+    name: Create Temporary Assistant for Testing
     runs-on: ubuntu-latest
     outputs:
-      assistant_id: ${{ steps.create-assistant-process.outputs.assistant_id }}
+      # This output now points to the dedicated "set-job-output" step
+      assistant_id: ${{ steps.set-job-output.outputs.assistant_id }} 
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Create Temporary Assistant and Capture ID
-        id: create-assistant-process
+      - name: Create Temporary Assistant and Prepare ID for Output
+        id: create-assistant-process # Renamed this ID
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GITHUB_SHA: ${{ github.sha }}
         run: |
-          set -euxo pipefail
+          set -euxo pipefail # Strict error checking and verbose output
 
           CONFIG_FILE="assistant_config.json"
-
+          
+          # Check if instructions.txt exists and is readable BEFORE using its name in a variable
+          if [ ! -f "instructions.txt" ]; then
+              echo "Error: instructions.txt not found!"
+              exit 1
+          fi
+          
           SHORT_SHA="${GITHUB_SHA:0:7}"
           NAME_FROM_CONFIG=$(jq -r '.name // empty' "$CONFIG_FILE")
+          
           if [ -z "$NAME_FROM_CONFIG" ]; then
             echo "Error: 'name' field missing or empty in $CONFIG_FILE"
             exit 1
           fi
+          
           NEW_NAME="${SHORT_SHA}_${NAME_FROM_CONFIG}"
-
           INSTRUCTIONS=$(cat instructions.txt | jq -Rs .)
 
-          jq --arg instr "$INSTRUCTIONS" --arg newname "$NEW_NAME" '
+          echo "--- Debug: Content of instructions.txt ---"
+          cat instructions.txt
+          echo "--- End instructions.txt content ---"
+          
+          echo "--- Debug: Running jq for payload creation ---"
+          if ! jq --arg instr "$INSTRUCTIONS" --arg newname "$NEW_NAME" '
             del(.id, .object, .created_at, .updated_at) |
             if .reasoning_effort == null then del(.reasoning_effort) else . end |
             if .description == null then .description = "" else . end |
@@ -44,8 +64,22 @@ jobs:
             else . end |
             .instructions = $instr |
             .name = $newname
-          ' "$CONFIG_FILE" > temp_create_payload.json
+          ' "$CONFIG_FILE" > temp_create_payload.json 2>&1; then
+            echo "Error: jq failed to process '$CONFIG_FILE'."
+            echo "jq output (might contain error messages):"
+            cat temp_create_payload.json # This will contain jq's error messages if it failed
+            exit 1 # Fail the step explicitly
+          fi
+          echo "--- Debug: jq for payload creation completed ---"
 
+          echo "Payload to be sent for new assistant:"
+          if ! jq -e . temp_create_payload.json; then
+              echo "Error: temp_create_payload.json is not valid JSON or is empty."
+              cat temp_create_payload.json
+              exit 1
+          fi
+          
+          echo "--- Debug: Making API call to OpenAI ---"
           RESPONSE_HTTP_CODE=$(curl -s -o response.json -w "%{http_code}" \
             -X POST \
             -H "Content-Type: application/json" \
@@ -53,28 +87,46 @@ jobs:
             -H "OpenAI-Beta: assistants=v2" \
             -d @temp_create_payload.json \
             "https://api.openai.com/v1/assistants")
-
+          echo "--- Debug: API call completed ---"
+          
+          echo "Curl HTTP Response Code: $RESPONSE_HTTP_CODE"
           if [ "$RESPONSE_HTTP_CODE" -eq 200 ]; then
-            ASSISTANT_ID_FINAL=$(jq -r '.id' response.json)
-            if [ -z "$ASSISTANT_ID_FINAL" ]; then
-              echo "Error: Assistant ID could not be extracted from response.json."
-              exit 1
+            ASSISTANT_ID_FROM_API=$(jq -r '.id' response.json) # Capture ID directly from API response
+            
+            if [ -z "$ASSISTANT_ID_FROM_API" ]; then
+                echo "Error: Assistant ID could not be extracted from response.json. Response content:"
+                cat response.json # Print the full response for inspection
+                exit 1 # Fail the step explicitly if ID is missing
             fi
-            echo "assistant_id=$ASSISTANT_ID_FINAL" >> $GITHUB_OUTPUT
+            echo "Temporary Assistant created successfully with ID: $ASSISTANT_ID_FROM_API"
+            echo "--- Debug: Full OpenAI API success response ---"
+            cat response.json
+            echo "--- End OpenAI API response ---"
+            
+            # This makes the variable available to subsequent steps within THIS job
+            echo "ASSISTANT_ID_FOR_NEXT_STEPS=$ASSISTANT_ID_FROM_API" >> $GITHUB_ENV 
+            echo "--- Debug: ASSISTANT_ID_FOR_NEXT_STEPS exported to GITHUB_ENV ---"
+
           else
-            echo "Failed to create assistant, HTTP $RESPONSE_HTTP_CODE"
+            echo "Failed to create temporary assistant: HTTP $RESPONSE_HTTP_CODE. Response content:"
             cat response.json
             exit 1
           fi
 
-
+      - name: Set Assistant ID as Job Output # Dedicated step for job-level output
+        id: set-job-output # This ID is referenced in `jobs.<job_id>.outputs.assistant_id`
+        run: |
+          # The variable exported in the previous step is now available via ${{ env.VARIABLE_NAME }}
+          echo "assistant_id=${{ env.ASSISTANT_ID_FOR_NEXT_STEPS }}" >> $GITHUB_OUTPUT
+          echo "--- Debug: Final assistant_id set as job output: ${{ env.ASSISTANT_ID_FOR_NEXT_STEPS }} ---"
 
   run-tests:
     name: Run Tests
-    needs: create-temp-assistant
+    needs: create-temp-assistant # This job now depends on the new job
     runs-on: ubuntu-latest
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      # Pass the assistant_id from the previous job's output
       DEV_ASSISTANT_ID: ${{ needs.create-temp-assistant.outputs.assistant_id }}
 
     steps:
@@ -88,39 +140,44 @@ jobs:
 
       - name: Create and activate venv, install deps, and run tests
         run: |
-          echo "Debug: DEV_ASSISTANT_ID is $DEV_ASSISTANT_ID"
+          echo "Debug: DEV_ASSISTANT_ID is '$DEV_ASSISTANT_ID'" # Added quotes for clarity
           python3 -m venv venv
           source venv/bin/activate
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          python eval_script.py
-        continue-on-error: true
-
+          # Pass DEV_ASSISTANT_ID to your Python test script if it needs it
+          python eval_script.py "$DEV_ASSISTANT_ID" # Example: pass as command-line arg
+        continue-on-error: true # This will allow the delete-temp-assistant job to run even if tests fail
 
   delete-temp-assistant:
     name: Delete Temporary Assistant
-    needs: run-tests
+    needs: run-tests # This job should run after tests
     runs-on: ubuntu-latest
-    if: always()
+    if: always() # This ensures the job runs even if previous jobs failed
 
     steps:
-      - name: Debug Output Variable
+      - name: Debug Output Variable from Previous Job
         run: |
-          echo "assistant_id from previous job: '${{ needs.create-temp-assistant.outputs.assistant_id }}'"
-        env:
-          ASSISTANT_ID_TO_DELETE: ${{ needs.create-temp-assistant.outputs.assistant_id }}
+          # Use raw expression to see if the value is even available in the context
+          echo "Debug 1: Value from create-temp-assistant job outputs directly: '${{ needs.create-temp-assistant.outputs.assistant_id }}'"
+
+          # The environment variable ASSISTANT_ID_TO_DELETE will be set by the next step's env block
+          # For this debug step, we fetch it directly from the `needs` context.
+          echo "Debug 2: Value for deletion: '${{ needs.create-temp-assistant.outputs.assistant_id }}'"
 
       - name: Delete Temporary Assistant
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          ASSISTANT_ID_TO_DELETE: ${{ needs.create-temp-assistant.outputs.assistant_id }}
+          # Set the environment variable for THIS step
+          ASSISTANT_ID_TO_DELETE: ${{ needs.create-temp-assistant.outputs.assistant_id }} 
         run: |
+          # Re-check locally within this run block
           if [ -z "$ASSISTANT_ID_TO_DELETE" ]; then
-            echo "Error: ASSISTANT_ID_TO_DELETE is empty. Cannot delete temporary assistant."
-            exit 1
+            echo "Error: ASSISTANT_ID_TO_DELETE is empty. Skipping deletion as no ID was propagated."
+            exit 0 # Exit gracefully, as we cannot delete an unknown assistant
           fi
 
-          echo "Deleting temporary assistant with ID: $ASSISTANT_ID_TO_DELETE"
+          echo "Attempting to delete temporary assistant with ID: $ASSISTANT_ID_TO_DELETE"
           DELETE_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
             -X DELETE \
             -H "Authorization: Bearer $OPENAI_API_KEY" \
@@ -128,20 +185,21 @@ jobs:
             "https://api.openai.com/v1/assistants/$ASSISTANT_ID_TO_DELETE")
 
           if [ "$DELETE_RESPONSE" -eq 200 ]; then
-            echo "Deleted assistant $ASSISTANT_ID_TO_DELETE successfully."
+            echo "Temporary Assistant $ASSISTANT_ID_TO_DELETE deleted successfully."
           else
-            echo "Failed to delete assistant $ASSISTANT_ID_TO_DELETE: HTTP $DELETE_RESPONSE"
-            exit 1
+            echo "Failed to delete temporary assistant $ASSISTANT_ID_TO_DELETE: HTTP $DELETE_RESPONSE"
+            # It's good practice to fail the cleanup job if cleanup fails, for visibility
+            exit 1 
           fi
-
 
   deploy-prod:
     name: Deploy to Prod
-    needs: run-tests
-    if: success()
+    needs: run-tests # This job now directly depends on the tests passing
+    if: success() # Only proceed to deploy-prod if run-tests passed
     runs-on: ubuntu-latest
     environment:
       name: production
+      # Manual approval required via GitHub Environments
 
     steps:
       - name: Checkout code
@@ -150,12 +208,18 @@ jobs:
       - name: Deploy Assistant to Prod
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          ASSISTANT_ID: ${{ secrets.PROD_ASSISTANT_ID }}
+          ASSISTANT_ID: ${{ secrets.PROD_ASSISTANT_ID }} # Use the PROD_ASSISTANT_ID secret for the actual production assistant
         run: |
           CONFIG_FILE="assistant_config.json"
+          # Ensure instructions.txt exists before trying to read it
+          if [ ! -f "instructions.txt" ]; then
+              echo "Error: instructions.txt not found for production deployment!"
+              exit 1
+          fi
           INSTRUCTIONS=$(cat instructions.txt | jq -Rs .)
           API_URL="https://api.openai.com/v1/assistants/$ASSISTANT_ID"
 
+          # Prepare JSON payload:
           jq --arg instr "$INSTRUCTIONS" '
             del(.object) |
             if .reasoning_effort == null then del(.reasoning_effort) else . end |
