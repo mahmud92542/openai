@@ -4,21 +4,27 @@ on:
   push:
     branches:
       - main
+    paths: # Trigger only when assistant_config.json or instructions.txt changes
+      - 'assistant_config.json'
+      - 'instructions.txt'
+      - 'eval_script.py'
+      - 'test_cases.json'
+      - '.github/workflows/actions.yml' # Also trigger if the workflow file itself changes
 
 jobs:
   create-temp-assistant:
     name: Create Temporary Assistant for Testing
     runs-on: ubuntu-latest
     outputs:
-      # This output now points to the dedicated "set-job-output" step
-      assistant_id: ${{ steps.set-job-output.outputs.assistant_id }} 
+      # This now points directly to the output of the 'create-assistant-process' step
+      assistant_id: ${{ steps.create-assistant-process.outputs.assistant_id }} 
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Create Temporary Assistant and Prepare ID for Output
-        id: create-assistant-process # Renamed this ID
+      - name: Create Temporary Assistant and Capture ID
+        id: create-assistant-process # This step will now directly set its output
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GITHUB_SHA: ${{ github.sha }}
@@ -85,34 +91,27 @@ jobs:
           
           echo "Curl HTTP Response Code: $RESPONSE_HTTP_CODE"
           if [ "$RESPONSE_HTTP_CODE" -eq 200 ]; then
-            ASSISTANT_ID_FROM_API=$(jq -r '.id' response.json) # Capture ID directly from API response
+            ASSISTANT_ID_FINAL=$(jq -r '.id' response.json) # Capture ID directly from API response
             
-            if [ -z "$ASSISTANT_ID_FROM_API" ]; then
+            if [ -z "$ASSISTANT_ID_FINAL" ]; then
                 echo "Error: Assistant ID could not be extracted from response.json. Response content:"
                 cat response.json # Print the full response for inspection
                 exit 1 # Fail the step explicitly if ID is missing
             fi
-            echo "Temporary Assistant created successfully with ID: $ASSISTANT_ID_FROM_API"
+            echo "Temporary Assistant created successfully with ID: $ASSISTANT_ID_FINAL"
             echo "--- Debug: Full OpenAI API success response ---"
             cat response.json
             echo "--- End OpenAI API response ---"
             
-            # This makes the variable available to subsequent steps within THIS job
-            echo "ASSISTANT_ID_FOR_NEXT_STEPS=$ASSISTANT_ID_FROM_API" >> $GITHUB_ENV 
-            echo "--- Debug: ASSISTANT_ID_FOR_NEXT_STEPS exported to GITHUB_ENV ---"
+            # Direct output setting for the step
+            echo "assistant_id=$ASSISTANT_ID_FINAL" >> $GITHUB_OUTPUT 
+            echo "--- Debug: assistant_id set as step output: $ASSISTANT_ID_FINAL ---"
 
           else
             echo "Failed to create temporary assistant: HTTP $RESPONSE_HTTP_CODE. Response content:"
             cat response.json
             exit 1
           fi
-
-      - name: Set Assistant ID as Job Output # Dedicated step for job-level output
-        id: set-job-output # This ID is referenced in `jobs.<job_id>.outputs.assistant_id`
-        run: |
-          # The variable exported in the previous step is now available via ${{ env.VARIABLE_NAME }}
-          echo "assistant_id=${{ env.ASSISTANT_ID_FOR_NEXT_STEPS }}" >> $GITHUB_OUTPUT
-          echo "--- Debug: Final assistant_id set as job output: ${{ env.ASSISTANT_ID_FOR_NEXT_STEPS }} ---"
 
   run-tests:
     name: Run Tests
@@ -165,10 +164,12 @@ jobs:
           # Set the environment variable for THIS step
           ASSISTANT_ID_TO_DELETE: ${{ needs.create-temp-assistant.outputs.assistant_id }} 
         run: |
-          # Re-check locally within this run block
+          # If ASSISTANT_ID_TO_DELETE is empty, it means the assistant creation failed,
+          # so this cleanup step should also fail to indicate an issue in the overall workflow.
           if [ -z "$ASSISTANT_ID_TO_DELETE" ]; then
-            echo "Error: ASSISTANT_ID_TO_DELETE is empty. Skipping deletion as no ID was propagated."
-            exit 0 # Exit gracefully, as we cannot delete an unknown assistant
+            echo "Error: ASSISTANT_ID_TO_DELETE is empty. Assistant was likely not created successfully in a prior step."
+            echo "Failing cleanup job to indicate a critical upstream issue."
+            exit 1 # Fail the job if ID is missing
           fi
 
           echo "Attempting to delete temporary assistant with ID: $ASSISTANT_ID_TO_DELETE"
@@ -182,7 +183,7 @@ jobs:
             echo "Temporary Assistant $ASSISTANT_ID_TO_DELETE deleted successfully."
           else
             echo "Failed to delete temporary assistant $ASSISTANT_ID_TO_DELETE: HTTP $DELETE_RESPONSE"
-            # It's good practice to fail the cleanup job if cleanup fails, for visibility
+            # Fail the job if cleanup itself fails
             exit 1 
           fi
 
