@@ -10,6 +10,8 @@ jobs:
     name: Create Temporary Assistant for Testing
     runs-on: ubuntu-latest
     outputs:
+      # While artifacts are used for robust transfer, keeping this output
+      # can still be useful for general workflow overview in GitHub UI.
       assistant_id: ${{ steps.create-assistant-process.outputs.assistant_id }}
 
     steps:
@@ -42,11 +44,6 @@ jobs:
           NEW_NAME="${SHORT_SHA}_${NAME_FROM_CONFIG}"
           INSTRUCTIONS=$(cat instructions.txt | jq -Rs .)
 
-          echo "--- Debug: Content of instructions.txt ---"
-          cat instructions.txt
-          echo "--- End instructions.txt content ---"
-          
-          echo "--- Debug: Running jq for payload creation ---"
           if ! jq --arg instr "$INSTRUCTIONS" --arg newname "$NEW_NAME" '
             del(.id, .object, .created_at, .updated_at) |
             if .reasoning_effort == null then del(.reasoning_effort) else . end |
@@ -58,20 +55,16 @@ jobs:
             .name = $newname
           ' "$CONFIG_FILE" > temp_create_payload.json 2>&1; then
             echo "Error: jq failed to process '$CONFIG_FILE'."
-            echo "jq output (might contain error messages):"
             cat temp_create_payload.json
             exit 1
           fi
-          echo "--- Debug: jq for payload creation completed ---"
 
-          echo "Payload to be sent for new assistant:"
           if ! jq -e . temp_create_payload.json; then
               echo "Error: temp_create_payload.json is not valid JSON or is empty."
               cat temp_create_payload.json
               exit 1
           fi
           
-          echo "--- Debug: Making API call to OpenAI ---"
           RESPONSE_HTTP_CODE=$(curl -s -o response.json -w "%{http_code}" \
             -X POST \
             -H "Content-Type: application/json" \
@@ -79,34 +72,28 @@ jobs:
             -H "OpenAI-Beta: assistants=v2" \
             -d @temp_create_payload.json \
             "https://api.openai.com/v1/assistants")
-          echo "--- Debug: API call completed ---"
           
           if [ "$RESPONSE_HTTP_CODE" -eq 200 ]; then
             ASSISTANT_ID_FINAL=$(jq -r '.id' response.json)
             
             if [ -z "$ASSISTANT_ID_FINAL" ]; then
-                echo "Error: Assistant ID could not be extracted from response.json. Response content:"
+                echo "Error: Assistant ID could not be extracted from response.json."
                 cat response.json
                 exit 1
             fi
             echo "Temporary Assistant created successfully with ID: $ASSISTANT_ID_FINAL"
-            echo "--- Debug: Full OpenAI API success response ---"
-            cat response.json
-            echo "--- End OpenAI API response ---"
             
             echo "assistant_id=$ASSISTANT_ID_FINAL" >> $GITHUB_OUTPUT 
-            echo "--- Debug: assistant_id set as step output via GITHUB_OUTPUT: $ASSISTANT_ID_FINAL ---"
-            
             echo "$ASSISTANT_ID_FINAL" > assistant_id.txt # Save ID to a file
 
           else
-            echo "Failed to create temporary assistant: HTTP $RESPONSE_HTTP_CODE. Response content:"
+            echo "Failed to create temporary assistant: HTTP $RESPONSE_HTTP_CODE."
             cat response.json
             exit 1
           fi
 
       - name: Upload Assistant ID Artifact
-        uses: actions/upload-artifact@v4 # <<< Updated to v4
+        uses: actions/upload-artifact@v4
         with:
           name: assistant-id-artifact
           path: assistant_id.txt
@@ -131,7 +118,7 @@ jobs:
 
       - name: Create and activate venv, install deps, and run tests
         run: |
-          echo "Debug: DEV_ASSISTANT_ID is '$DEV_ASSISTANT_ID'"
+          # The print statement in eval_script.py will confirm the ID being used
           python3 -m venv venv
           source venv/bin/activate
           python -m pip install --upgrade pip
@@ -144,19 +131,19 @@ jobs:
     name: Delete Temporary Assistant
     needs: run-tests
     runs-on: ubuntu-latest
-    if: always()
+    if: always() # Always attempt cleanup, even if tests failed
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
       - name: Download Assistant ID Artifact
-        uses: actions/download-artifact@v4 # <<< Updated to v4
+        uses: actions/download-artifact@v4
         with:
           name: assistant-id-artifact
           path: .
 
-      - name: Debug and Delete Temporary Assistant
+      - name: Delete Temporary Assistant
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
@@ -167,11 +154,6 @@ jobs:
           
           ASSISTANT_ID_TO_DELETE=$(cat assistant_id.txt)
           
-          echo "--- DEBUG: Inside Delete Temporary Assistant run block (Artifact Method) ---"
-          echo "Value from artifact file (assistant_id.txt): '$ASSISTANT_ID_TO_DELETE'"
-          echo "Length of ASSISTANT_ID_TO_DELETE: ${#ASSISTANT_ID_TO_DELETE}"
-          echo "--- END DEBUG ---"
-
           if [ -z "$ASSISTANT_ID_TO_DELETE" ]; then
             echo "Error: ASSISTANT_ID_TO_DELETE is empty after reading from artifact. Assistant was likely not created successfully in a prior step."
             echo "Failing cleanup job to indicate a critical upstream issue."
@@ -194,8 +176,12 @@ jobs:
 
   deploy-prod:
     name: Deploy to Prod
-    needs: run-tests
-    if: success()
+    # This job now depends on the 'delete-temp-assistant' job.
+    # It will only run if 'delete-temp-assistant' successfully completes.
+    # Since 'delete-temp-assistant' will fail if deletion doesn't occur,
+    # this ensures the deployment only happens if cleanup was successful.
+    needs: delete-temp-assistant
+    if: success() # Only proceed if the 'delete-temp-assistant' job passed
     runs-on: ubuntu-latest
     environment:
       name: production
