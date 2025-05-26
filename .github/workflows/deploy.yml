@@ -145,19 +145,23 @@ jobs:
     steps:
       - name: Debug Output Variable from Previous Job
         run: |
-          # Use raw expression to see if the value is even available in the context
-          echo "Debug 1: Value from create-temp-assistant job outputs directly: '${{ needs.create-temp-assistant.outputs.assistant_id }}'"
-
-          # The environment variable ASSISTANT_ID_TO_DELETE will be set by the next step's env block
-          # For this debug step, we fetch it directly from the `needs` context.
-          echo "Debug 2: Value for deletion: '${{ needs.create-temp-assistant.outputs.assistant_id }}'"
+          # Confirm the raw value from the context
+          echo "Debug: Value from create-temp-assistant job outputs directly: '${{ needs.create-temp-assistant.outputs.assistant_id }}'"
 
       - name: Delete Temporary Assistant
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          # Set the environment variable for THIS step
-          ASSISTANT_ID_TO_DELETE: ${{ needs.create-temp-assistant.outputs.assistant_id }} 
+          # Removed ASSISTANT_ID_TO_DELETE from env here, will inject directly
         run: |
+          # Capture the ID directly from the GitHub Actions context into a shell variable
+          # This is the key change: direct injection
+          ASSISTANT_ID_TO_DELETE="${{ needs.create-temp-assistant.outputs.assistant_id }}"
+          
+          echo "--- DEBUG: Inside Delete Temporary Assistant run block ---"
+          echo "Value of local shell variable ASSISTANT_ID_TO_DELETE (direct injection): '$ASSISTANT_ID_TO_DELETE'"
+          echo "Length of ASSISTANT_ID_TO_DELETE: ${#ASSISTANT_ID_TO_DELETE}"
+          echo "--- END DEBUG ---"
+
           # If ASSISTANT_ID_TO_DELETE is empty, it means the assistant creation failed,
           # so this cleanup step should also fail to indicate an issue in the overall workflow.
           if [ -z "$ASSISTANT_ID_TO_DELETE" ]; then
@@ -180,6 +184,7 @@ jobs:
             # Fail the job if cleanup itself fails
             exit 1 
           fi
+
   deploy-prod:
     name: Deploy to Prod
     needs: run-tests # This job now directly depends on the tests passing
