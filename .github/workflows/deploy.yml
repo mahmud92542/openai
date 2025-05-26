@@ -7,8 +7,9 @@ on:
     paths: # Trigger only when assistant_config.json or instructions.txt changes
       - 'assistant_config.json'
       - 'instructions.txt'
-      - 'eval_script.py' # Add eval_script.py so changes to it trigger the workflow
-      - 'test_cases.json' # Add test_cases.json for the same reason
+      - 'eval_script.py'
+      - 'test_cases.json'
+      - 'deploy.yml'
 
 jobs:
   create-temp-assistant:
@@ -31,7 +32,7 @@ jobs:
 
           # Prepare JSON payload for creating a new assistant
           jq --arg instr "$INSTRUCTIONS" '
-            del(.id, .object, .created_at, .updated_at) | # Remove fields that shouldn't be in a create request
+            del(.id, .object, .created_at, .updated_at) |
             if .reasoning_effort == null then del(.reasoning_effort) else . end |
             if .description == null then .description = "" else . end |
             if .tool_resources and .tool_resources.code_interpreter and .tool_resources.code_interpreter.file_ids == [""] then
@@ -86,9 +87,7 @@ jobs:
           source venv/bin/activate
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          # Execute the evaluation script directly, passing the DEV_ASSISTANT_ID via environment
           python eval_script.py
-        # Ensure the test step doesn't fail the workflow if tests fail, as we need to delete the assistant
         continue-on-error: true # This will allow the delete-temp-assistant job to run even if tests fail
 
   delete-temp-assistant:
@@ -115,22 +114,12 @@ jobs:
             echo "Temporary Assistant $ASSISTANT_ID_TO_DELETE deleted successfully."
           else
             echo "Failed to delete temporary assistant $ASSISTANT_ID_TO_DELETE: HTTP $DELETE_RESPONSE"
-            # It's okay to not exit 1 here, as the main goal is cleanup.
-            # If the deletion fails, it might be due to a previous error or an invalid ID.
           fi
 
-  # The original deploy-dev and deploy-prod jobs remain,
-  # but they are now independent of the temporary assistant creation/testing flow.
-  # They will continue to deploy based on the main branch.
-  # If you want to integrate the successful test run into dev/prod deployment,
-  # you would adjust their 'needs' clause. For this request, we'll keep them separate.
   deploy-dev:
     name: Deploy to Dev
     runs-on: ubuntu-latest
     environment: development
-    # This job now runs independently of the test flow, unless you explicitly
-    # want it to only run if create-temp-assistant or run-tests succeeds.
-    # For now, it will trigger on push to main branch with general changes.
     needs: [create-temp-assistant, run-tests] # Ensures tests are run before deploying to dev
     if: success() # Only deploy to dev if all previous jobs (including tests) passed
 
