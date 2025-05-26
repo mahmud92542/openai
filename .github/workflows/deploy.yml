@@ -7,10 +7,9 @@ on:
 
 jobs:
   create-temp-assistant:
-    name: Create Temporary Assistant for Testing
     runs-on: ubuntu-latest
     outputs:
-      assistant_id: ${{ steps.set-assistant-output.outputs.assistant_id }}
+      assistant_id: ${{ steps.create-assistant-process.outputs.assistant_id }}
 
     steps:
       - name: Checkout code
@@ -26,22 +25,16 @@ jobs:
 
           CONFIG_FILE="assistant_config.json"
 
-          # Extract first 6 chars of commit sha
           SHORT_SHA="${GITHUB_SHA:0:6}"
-
-          # Extract 'name' field from config JSON
           NAME_FROM_CONFIG=$(jq -r '.name // empty' "$CONFIG_FILE")
           if [ -z "$NAME_FROM_CONFIG" ]; then
             echo "Error: 'name' field missing or empty in $CONFIG_FILE"
             exit 1
           fi
-
-          # Build new name as <6chars_commit><name>
-          NEW_NAME="${SHORT_SHA}${NAME_FROM_CONFIG}"
+          NEW_NAME="${SHORT_SHA}_${NAME_FROM_CONFIG}"
 
           INSTRUCTIONS=$(cat instructions.txt | jq -Rs .)
 
-          # Construct the payload JSON with new name
           jq --arg instr "$INSTRUCTIONS" --arg newname "$NEW_NAME" '
             del(.id, .object, .created_at, .updated_at) |
             if .reasoning_effort == null then del(.reasoning_effort) else . end |
@@ -53,10 +46,6 @@ jobs:
             .name = $newname
           ' "$CONFIG_FILE" > temp_create_payload.json
 
-          echo "Payload to be sent:"
-          jq . temp_create_payload.json
-
-          # Call OpenAI API to create assistant
           RESPONSE_HTTP_CODE=$(curl -s -o response.json -w "%{http_code}" \
             -X POST \
             -H "Content-Type: application/json" \
@@ -65,40 +54,19 @@ jobs:
             -d @temp_create_payload.json \
             "https://api.openai.com/v1/assistants")
 
-          echo "API response HTTP code: $RESPONSE_HTTP_CODE"
-          cat response.json
-
           if [ "$RESPONSE_HTTP_CODE" -eq 200 ]; then
             ASSISTANT_ID_FINAL=$(jq -r '.id' response.json)
             if [ -z "$ASSISTANT_ID_FINAL" ]; then
-                echo "Error: Assistant ID could not be extracted from response.json."
-                exit 1
+              echo "Error: Assistant ID could not be extracted from response.json."
+              exit 1
             fi
-
-            echo "Temporary Assistant created with ID: $ASSISTANT_ID_FINAL"
-
-            # Export for next steps
-            echo "ASSISTANT_ID_FOR_OUTPUT=$ASSISTANT_ID_FINAL" >> $GITHUB_ENV
+            echo "assistant_id=$ASSISTANT_ID_FINAL" >> $GITHUB_OUTPUT
           else
             echo "Failed to create assistant, HTTP $RESPONSE_HTTP_CODE"
+            cat response.json
             exit 1
           fi
 
-      - name: Set Assistant ID as Job Output
-        id: set-assistant-output
-        env:
-          ASSISTANT_ID_FOR_OUTPUT: ${{ env.ASSISTANT_ID_FOR_OUTPUT }}
-        run: |
-          echo "Debug: Inside set-assistant-output step"
-          echo "Debug: ASSISTANT_ID_FOR_OUTPUT env var value: '$ASSISTANT_ID_FOR_OUTPUT'"
-
-          if [ -z "$ASSISTANT_ID_FOR_OUTPUT" ]; then
-            echo "Error: ASSISTANT_ID_FOR_OUTPUT is empty! Cannot set job output."
-            exit 1
-          fi
-
-          echo "assistant_id=$ASSISTANT_ID_FOR_OUTPUT" >> $GITHUB_OUTPUT
-          echo "Debug: assistant_id output set to: $ASSISTANT_ID_FOR_OUTPUT"
 
 
   run-tests:
@@ -138,8 +106,7 @@ jobs:
     steps:
       - name: Debug Output Variable
         run: |
-          echo "Debug 1: Value from create-temp-assistant job outputs directly: '${{ needs.create-temp-assistant.outputs.assistant_id }}'"
-          echo "Debug 2: Value of ASSISTANT_ID_TO_DELETE environment variable: '$ASSISTANT_ID_TO_DELETE'"
+          echo "assistant_id from previous job: '${{ needs.create-temp-assistant.outputs.assistant_id }}'"
         env:
           ASSISTANT_ID_TO_DELETE: ${{ needs.create-temp-assistant.outputs.assistant_id }}
 
@@ -153,7 +120,7 @@ jobs:
             exit 1
           fi
 
-          echo "Attempting to delete temporary assistant with ID: $ASSISTANT_ID_TO_DELETE"
+          echo "Deleting temporary assistant with ID: $ASSISTANT_ID_TO_DELETE"
           DELETE_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
             -X DELETE \
             -H "Authorization: Bearer $OPENAI_API_KEY" \
@@ -161,9 +128,9 @@ jobs:
             "https://api.openai.com/v1/assistants/$ASSISTANT_ID_TO_DELETE")
 
           if [ "$DELETE_RESPONSE" -eq 200 ]; then
-            echo "Temporary Assistant $ASSISTANT_ID_TO_DELETE deleted successfully."
+            echo "Deleted assistant $ASSISTANT_ID_TO_DELETE successfully."
           else
-            echo "Failed to delete temporary assistant $ASSISTANT_ID_TO_DELETE: HTTP $DELETE_RESPONSE"
+            echo "Failed to delete assistant $ASSISTANT_ID_TO_DELETE: HTTP $DELETE_RESPONSE"
             exit 1
           fi
 
