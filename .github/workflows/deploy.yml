@@ -132,51 +132,51 @@ jobs:
 
         continue-on-error: true # Important: Allows the cleanup job to run even if tests fail
 
-  delete-temp-assistant:
-    name: Delete Temporary Assistant
-    needs: run-tests
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' && always() # ONLY run on pull requests, always attempt cleanup
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+  # delete-temp-assistant:
+  #   name: Delete Temporary Assistant
+  #   needs: run-tests
+  #   runs-on: ubuntu-latest
+  #   if: github.event_name == 'pull_request' && always() # ONLY run on pull requests, always attempt cleanup
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v3
 
-      - name: Download Assistant ID Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: assistant-id-artifact
-          path: .
+  #     - name: Download Assistant ID Artifact
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         name: assistant-id-artifact
+  #         path: .
 
-      - name: Delete Temporary Assistant
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: |
-          if [ ! -f "assistant_id.txt" ]; then
-            echo "Error: assistant_id.txt artifact not found! Cannot delete assistant."
-            exit 1
-          fi
+  #     - name: Delete Temporary Assistant
+  #       env:
+  #         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  #       run: |
+  #         if [ ! -f "assistant_id.txt" ]; then
+  #           echo "Error: assistant_id.txt artifact not found! Cannot delete assistant."
+  #           exit 1
+  #         fi
           
-          ASSISTANT_ID_TO_DELETE=$(cat assistant_id.txt)
+  #         ASSISTANT_ID_TO_DELETE=$(cat assistant_id.txt)
           
-          if [ -z "$ASSISTANT_ID_TO_DELETE" ]; then
-            echo "Error: ASSISTANT_ID_TO_DELETE is empty after reading from artifact. Assistant was likely not created successfully in a prior step."
-            echo "Failing cleanup job to indicate a critical upstream issue."
-            exit 1
-          fi
+  #         if [ -z "$ASSISTANT_ID_TO_DELETE" ]; then
+  #           echo "Error: ASSISTANT_ID_TO_DELETE is empty after reading from artifact. Assistant was likely not created successfully in a prior step."
+  #           echo "Failing cleanup job to indicate a critical upstream issue."
+  #           exit 1
+  #         fi
 
-          echo "Attempting to delete temporary assistant with ID: $ASSISTANT_ID_TO_DELETE"
-          DELETE_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
-            -X DELETE \
-            -H "Authorization: Bearer $OPENAI_API_KEY" \
-            -H "OpenAI-Beta: assistants=v2" \
-            "https://api.openai.com/v1/assistants/$ASSISTANT_ID_TO_DELETE")
+  #         echo "Attempting to delete temporary assistant with ID: $ASSISTANT_ID_TO_DELETE"
+  #         DELETE_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+  #           -X DELETE \
+  #           -H "Authorization: Bearer $OPENAI_API_KEY" \
+  #           -H "OpenAI-Beta: assistants=v2" \
+  #           "https://api.openai.com/v1/assistants/$ASSISTANT_ID_TO_DELETE")
 
-          if [ "$DELETE_RESPONSE" -eq 200 ]; then
-            echo "Temporary Assistant $ASSISTANT_ID_TO_DELETE deleted successfully."
-          else
-            echo "Failed to delete temporary assistant $ASSISTANT_ID_TO_DELETE: HTTP $DELETE_RESPONSE"
-            exit 1
-          fi
+  #         if [ "$DELETE_RESPONSE" -eq 200 ]; then
+  #           echo "Temporary Assistant $ASSISTANT_ID_TO_DELETE deleted successfully."
+  #         else
+  #           echo "Failed to delete temporary assistant $ASSISTANT_ID_TO_DELETE: HTTP $DELETE_RESPONSE"
+  #           exit 1
+  #         fi
 
   # Deployment Job: deploy-prod
   # This job will ONLY run on push events targeting 'main' (i.e., after a merge)
