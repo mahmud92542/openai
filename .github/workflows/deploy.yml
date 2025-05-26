@@ -25,19 +25,20 @@ jobs:
 
           CONFIG_FILE="assistant_config.json"
           
-          # Check if instructions.txt exists and is readable
-          if [ ! -f "$INSTRUCTIONS" ]; then
+          # Check if instructions.txt exists and is readable BEFORE using its name in a variable
+          if [ ! -f "instructions.txt" ]; then
               echo "Error: instructions.txt not found!"
               exit 1
           fi
-
+          
+          # Now, assign the content to the INSTRUCTIONS variable
           INSTRUCTIONS=$(cat instructions.txt | jq -Rs .)
-
+          
           # Debug: Print content of instructions.txt
           echo "--- Debug: Content of instructions.txt ---"
           cat instructions.txt
           echo "--- End instructions.txt content ---"
-
+          
           # Prepare JSON payload for creating a new assistant
           # Redirect stderr to stdout for jq to capture potential errors
           echo "--- Debug: Running jq for payload creation ---"
@@ -56,8 +57,7 @@ jobs:
             exit 1 # Fail the step explicitly
           fi
           echo "--- Debug: jq for payload creation completed ---"
-
-
+          
           echo "Payload to be sent for new assistant:"
           # Re-jq for pretty printing if successful. Use 'jq -e .' to validate JSON.
           if ! jq -e . temp_create_payload.json; then
@@ -65,7 +65,7 @@ jobs:
               cat temp_create_payload.json
               exit 1
           fi
-
+          
           echo "--- Debug: Making API call to OpenAI ---"
           RESPONSE_HTTP_CODE=$(curl -s -o response.json -w "%{http_code}" \
             -X POST \
@@ -75,7 +75,7 @@ jobs:
             -d @temp_create_payload.json \
             "https://api.openai.com/v1/assistants")
           echo "--- Debug: API call completed ---"
-
+          
           echo "Curl HTTP Response Code: $RESPONSE_HTTP_CODE"
           if [ "$RESPONSE_HTTP_CODE" -eq 200 ]; then
             ASSISTANT_ID=$(jq -r '.id' response.json)
