@@ -25,7 +25,7 @@ jobs:
 
           CONFIG_FILE="assistant_config.json"
 
-          SHORT_SHA="${GITHUB_SHA:0:6}"
+          SHORT_SHA="${GITHUB_SHA:0:7}"
           NAME_FROM_CONFIG=$(jq -r '.name // empty' "$CONFIG_FILE")
           if [ -z "$NAME_FROM_CONFIG" ]; then
             echo "Error: 'name' field missing or empty in $CONFIG_FILE"
