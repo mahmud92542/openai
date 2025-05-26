@@ -209,6 +209,7 @@ def evaluate_tests(test_cases):
 
      openai.api_key = os.getenv("OPENAI_API_KEY")
      assistant_id = os.getenv("DEV_ASSISTANT_ID")
+     print(f"eval_script.py is running with Assistant ID: {assistant_id}")
      if not assistant_id:
          logging.error("Assistant ID not found in environment variables.")
          print("Error: Assistant ID not found in environment variables.")
