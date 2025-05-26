@@ -4,16 +4,18 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'assistant_config.json'
+      - 'instructions.txt'
+      - 'eval_script.py'
+      - 'test_cases.json'
+      - '.github/workflows/actions.yml'
 
 jobs:
   create-temp-assistant:
     name: Create Temporary Assistant for Testing
     runs-on: ubuntu-latest
     outputs:
-      # We still need to declare an output, even if it's primary purpose
-      # is just to make the job "available" via 'needs' and for debugging.
-      # Though with artifact passing, the direct output is less critical.
-      # For now, we'll keep the direct output from the step.
       assistant_id: ${{ steps.create-assistant-process.outputs.assistant_id }}
 
     steps:
@@ -21,7 +23,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Create Temporary Assistant and Capture ID
-        id: create-assistant-process # This step will now directly set its output
+        id: create-assistant-process
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GITHUB_SHA: ${{ github.sha }}
@@ -98,13 +100,10 @@ jobs:
             cat response.json
             echo "--- End OpenAI API response ---"
             
-            # --- Reverting to GITHUB_OUTPUT as the deprecation warning shows it's processing ---
             echo "assistant_id=$ASSISTANT_ID_FINAL" >> $GITHUB_OUTPUT 
             echo "--- Debug: assistant_id set as step output via GITHUB_OUTPUT: $ASSISTANT_ID_FINAL ---"
             
-            # --- CRITICAL CHANGE FOR ARTIFACT ---
             echo "$ASSISTANT_ID_FINAL" > assistant_id.txt # Save ID to a file
-            echo "Assistant ID saved to assistant_id.txt"
 
           else
             echo "Failed to create temporary assistant: HTTP $RESPONSE_HTTP_CODE. Response content:"
@@ -113,11 +112,11 @@ jobs:
           fi
 
       - name: Upload Assistant ID Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4 # <<< Updated to v4
         with:
           name: assistant-id-artifact
           path: assistant_id.txt
-          retention-days: 1 # Keep for a short period
+          retention-days: 1
 
   run-tests:
     name: Run Tests
@@ -125,7 +124,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      # Keep this as it's currently working and useful for your eval_script.py
       DEV_ASSISTANT_ID: ${{ needs.create-temp-assistant.outputs.assistant_id }} 
 
     steps:
@@ -144,32 +142,30 @@ jobs:
           source venv/bin/activate
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          python eval_script.py # eval_script.py uses os.getenv("DEV_ASSISTANT_ID")
+          python eval_script.py
 
         continue-on-error: true
 
   delete-temp-assistant:
     name: Delete Temporary Assistant
-    needs: run-tests # Depends on tests
+    needs: run-tests
     runs-on: ubuntu-latest
-    if: always() # Always attempt cleanup
+    if: always()
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3 # Needed to download artifact into workspace
+        uses: actions/checkout@v3
 
       - name: Download Assistant ID Artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4 # <<< Updated to v4
         with:
           name: assistant-id-artifact
-          path: . # Download to current working directory
+          path: .
 
       - name: Debug and Delete Temporary Assistant
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          # --- DEBUG AND RETRIEVE ID FROM ARTIFACT ---
-          # Check if the file exists
           if [ ! -f "assistant_id.txt" ]; then
             echo "Error: assistant_id.txt artifact not found! Cannot delete assistant."
             exit 1
@@ -185,7 +181,7 @@ jobs:
           if [ -z "$ASSISTANT_ID_TO_DELETE" ]; then
             echo "Error: ASSISTANT_ID_TO_DELETE is empty after reading from artifact. Assistant was likely not created successfully in a prior step."
             echo "Failing cleanup job to indicate a critical upstream issue."
-            exit 1 # Fail the job if ID is missing
+            exit 1
           fi
 
           echo "Attempting to delete temporary assistant with ID: $ASSISTANT_ID_TO_DELETE"
