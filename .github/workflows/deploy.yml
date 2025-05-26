@@ -4,6 +4,12 @@ on:
   push:
     branches:
       - main
+    paths: # Trigger only when assistant_config.json or instructions.txt changes
+      - 'assistant_config.json'
+      - 'instructions.txt'
+      - 'eval_script.py'
+      - 'test_cases.json'
+      - '.github/workflows/actions.yml' # Also trigger if the workflow file itself changes
 
 jobs:
   create-temp-assistant:
@@ -49,10 +55,10 @@ jobs:
           if [ "$RESPONSE" -eq 200 ]; then
             ASSISTANT_ID=$(jq -r '.id' response.json)
             echo "Temporary Assistant created successfully with ID: $ASSISTANT_ID"
-            echo "assistant_id=$ASSISTANT_ID" >> $GITHUB_OUTPUT # Set the output variable
+            echo "assistant_id=$ASSISTANT_ID" >> $GITHUB_OUTPUT # Set the output variable for the step
             cat response.json
           else
-            echo "Failed to create temporary assistant: $RESPONSE"
+            echo "Failed to create temporary assistant: HTTP $RESPONSE"
             cat response.json
             exit 1
           fi
@@ -91,12 +97,27 @@ jobs:
     if: always() # This ensures the job runs even if previous jobs failed
 
     steps:
+      - name: Debug Output Variable
+        run: |
+          # Use raw expression to see if the value is even available in the context
+          echo "Debug 1: Value from create-temp-assistant job outputs directly: '${{ needs.create-temp-assistant.outputs.assistant_id }}'"
+          
+          # Check the environment variable that is supposed to be set
+          echo "Debug 2: Value of ASSISTANT_ID_TO_DELETE environment variable: '$ASSISTANT_ID_TO_DELETE'"
+        env: # Define the environment variable here for the debug step to see it
+          ASSISTANT_ID_TO_DELETE: ${{ needs.create-temp-assistant.outputs.assistant_id }}
+
       - name: Delete Temporary Assistant
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          # Get the assistant ID from the output of the create-temp-assistant job
-          ASSISTANT_ID_TO_DELETE: ${{ needs.create-temp-assistant.outputs.assistant_id }}
+          ASSISTANT_ID_TO_DELETE: ${{ needs.create-temp-assistant.outputs.assistant_id }} # This line sets the env var for the curl step
         run: |
+          # Add a check to prevent curl from running with an empty ID
+          if [ -z "$ASSISTANT_ID_TO_DELETE" ]; then
+            echo "Error: ASSISTANT_ID_TO_DELETE is empty. Skipping deletion."
+            exit 0 # Exit gracefully, as we cannot delete an unknown assistant
+          fi
+
           echo "Attempting to delete temporary assistant with ID: $ASSISTANT_ID_TO_DELETE"
           DELETE_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
             -X DELETE \
@@ -108,6 +129,8 @@ jobs:
             echo "Temporary Assistant $ASSISTANT_ID_TO_DELETE deleted successfully."
           else
             echo "Failed to delete temporary assistant $ASSISTANT_ID_TO_DELETE: HTTP $DELETE_RESPONSE"
+            # Exit with 1 here so you know the cleanup failed, which might be critical
+            exit 1
           fi
 
   deploy-prod:
@@ -158,7 +181,7 @@ jobs:
             echo "Prod update successful!"
             cat response.json
           else
-            echo "Prod update failed: $RESPONSE"
+            echo "Prod update failed: HTTP $RESPONSE"
             cat response.json
             exit 1
           fi
