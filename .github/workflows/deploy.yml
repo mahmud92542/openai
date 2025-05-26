@@ -3,15 +3,18 @@ name: Assistant CI/CD Pipeline
 on:
   push:
     branches:
-      - main # This will trigger the full pipeline, including deploy-prod after merge
+      - main # This will ONLY trigger the deploy-prod job (after manual approval)
   pull_request:
     branches:
-      - main # This will trigger only the CI part (temp assistant, tests, cleanup)
+      - main # This will trigger the CI part (temp assistant, tests, cleanup)
 
 jobs:
+  # CI Jobs: create-temp-assistant, run-tests, delete-temp-assistant
+  # These jobs will ONLY run on pull_request events targeting 'main'
   create-temp-assistant:
     name: Create Temporary Assistant for Testing
     runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' # ONLY run on pull requests
     outputs:
       assistant_id: ${{ steps.create-assistant-process.outputs.assistant_id }}
 
@@ -104,6 +107,7 @@ jobs:
     name: Run Tests
     needs: create-temp-assistant
     runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && success() # ONLY run on pull requests and if previous step succeeded
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       DEV_ASSISTANT_ID: ${{ needs.create-temp-assistant.outputs.assistant_id }} 
@@ -132,8 +136,7 @@ jobs:
     name: Delete Temporary Assistant
     needs: run-tests
     runs-on: ubuntu-latest
-    if: always() # Always attempt cleanup, even if tests failed
-
+    if: github.event_name == 'pull_request' && always() # ONLY run on pull requests, always attempt cleanup
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -175,14 +178,14 @@ jobs:
             exit 1
           fi
 
+  # Deployment Job: deploy-prod
+  # This job will ONLY run on push events targeting 'main' (i.e., after a merge)
   deploy-prod:
     name: Deploy to Prod
-    # This job now depends on the 'delete-temp-assistant' job.
-    # It will only run if 'delete-temp-assistant' successfully completes.
-    # Since 'delete-temp-assistant' will fail if deletion doesn't occur,
-    # this ensures the deployment only happens if cleanup was successful.
-    needs: delete-temp-assistant
-    if: github.event_name == 'push' && success() # Only proceed if it's a push to main AND previous jobs passed
+    # This job does not need any of the CI jobs to have run successfully on a 'push' event,
+    # as its trigger is independent.
+    # It will only run if it's a 'push' to main.
+    if: github.event_name == 'push' # ONLY run on push events
     runs-on: ubuntu-latest
     environment:
       name: production # This links to your GitHub Environment for manual approvals
