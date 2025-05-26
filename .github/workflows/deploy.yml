@@ -10,15 +10,18 @@ jobs:
     name: Create Temporary Assistant for Testing
     runs-on: ubuntu-latest
     outputs:
-      # This still refers to the 'create-assistant-process' step's output
-      assistant_id: ${{ steps.create-assistant-process.outputs.assistant_id }} 
+      # We still need to declare an output, even if it's primary purpose
+      # is just to make the job "available" via 'needs' and for debugging.
+      # Though with artifact passing, the direct output is less critical.
+      # For now, we'll keep the direct output from the step.
+      assistant_id: ${{ steps.create-assistant-process.outputs.assistant_id }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
       - name: Create Temporary Assistant and Capture ID
-        id: create-assistant-process # This step will now use ::set-output
+        id: create-assistant-process # This step will now directly set its output
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GITHUB_SHA: ${{ github.sha }}
@@ -95,10 +98,13 @@ jobs:
             cat response.json
             echo "--- End OpenAI API response ---"
             
-            # --- CRITICAL CHANGE HERE ---
-            # Use the deprecated but sometimes more reliable ::set-output command
-            echo "::set-output name=assistant_id::${ASSISTANT_ID_FINAL}"
-            echo "--- Debug: assistant_id set as step output via ::set-output: $ASSISTANT_ID_FINAL ---"
+            # --- Reverting to GITHUB_OUTPUT as the deprecation warning shows it's processing ---
+            echo "assistant_id=$ASSISTANT_ID_FINAL" >> $GITHUB_OUTPUT 
+            echo "--- Debug: assistant_id set as step output via GITHUB_OUTPUT: $ASSISTANT_ID_FINAL ---"
+            
+            # --- CRITICAL CHANGE FOR ARTIFACT ---
+            echo "$ASSISTANT_ID_FINAL" > assistant_id.txt # Save ID to a file
+            echo "Assistant ID saved to assistant_id.txt"
 
           else
             echo "Failed to create temporary assistant: HTTP $RESPONSE_HTTP_CODE. Response content:"
@@ -106,13 +112,20 @@ jobs:
             exit 1
           fi
 
+      - name: Upload Assistant ID Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: assistant-id-artifact
+          path: assistant_id.txt
+          retention-days: 1 # Keep for a short period
+
   run-tests:
     name: Run Tests
     needs: create-temp-assistant
     runs-on: ubuntu-latest
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      # This mapping is correct and seems to be working for this job
+      # Keep this as it's currently working and useful for your eval_script.py
       DEV_ASSISTANT_ID: ${{ needs.create-temp-assistant.outputs.assistant_id }} 
 
     steps:
@@ -137,30 +150,40 @@ jobs:
 
   delete-temp-assistant:
     name: Delete Temporary Assistant
-    needs: run-tests # Depends on tests, so it runs after them
+    needs: run-tests # Depends on tests
     runs-on: ubuntu-latest
     if: always() # Always attempt cleanup
 
     steps:
-      - name: Debug Output Variable from Previous Job
-        run: |
-          # The key diagnostic: Is the ID making it here?
-          echo "Debug: Value from create-temp-assistant job outputs directly: '${{ needs.create-temp-assistant.outputs.assistant_id }}'"
+      - name: Checkout code
+        uses: actions/checkout@v3 # Needed to download artifact into workspace
 
-      - name: Delete Temporary Assistant
+      - name: Download Assistant ID Artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: assistant-id-artifact
+          path: . # Download to current working directory
+
+      - name: Debug and Delete Temporary Assistant
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          # The ID is passed into the environment variable for this specific step
-          ASSISTANT_ID_TO_DELETE: ${{ needs.create-temp-assistant.outputs.assistant_id }} 
         run: |
-          # --- DEBUGGING INSIDE RUN BLOCK ---
-          echo "--- DEBUG: Inside Delete Temporary Assistant run block ---"
-          echo "Value of ASSISTANT_ID_TO_DELETE (from step env): '$ASSISTANT_ID_TO_DELETE'"
+          # --- DEBUG AND RETRIEVE ID FROM ARTIFACT ---
+          # Check if the file exists
+          if [ ! -f "assistant_id.txt" ]; then
+            echo "Error: assistant_id.txt artifact not found! Cannot delete assistant."
+            exit 1
+          fi
+          
+          ASSISTANT_ID_TO_DELETE=$(cat assistant_id.txt)
+          
+          echo "--- DEBUG: Inside Delete Temporary Assistant run block (Artifact Method) ---"
+          echo "Value from artifact file (assistant_id.txt): '$ASSISTANT_ID_TO_DELETE'"
           echo "Length of ASSISTANT_ID_TO_DELETE: ${#ASSISTANT_ID_TO_DELETE}"
           echo "--- END DEBUG ---"
 
           if [ -z "$ASSISTANT_ID_TO_DELETE" ]; then
-            echo "Error: ASSISTANT_ID_TO_DELETE is empty. Assistant was likely not created successfully in a prior step."
+            echo "Error: ASSISTANT_ID_TO_DELETE is empty after reading from artifact. Assistant was likely not created successfully in a prior step."
             echo "Failing cleanup job to indicate a critical upstream issue."
             exit 1 # Fail the job if ID is missing
           fi
