@@ -1,14 +1,14 @@
 [
     {
       "id": "TC-001",
-      "input": "What kind of code is this, print('hello world')",
+      "input": "What kind of code is this, print('hey world')",
       "expected_output": "This code is written in Python.",
       "comparison_method": "model_graded"
     },
     {
       "id": "TC-002",
-      "input": "What is the capital of Bangladesh?",
-      "expected_output": "Dhaka",
+      "input": "What is the capital of India?",
+      "expected_output": "New Dellhi",
       "comparison_method": "model_graded"
     }
   ]
