@@ -20,6 +20,7 @@ jobs:
         id: create-assistant-process
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          COMMIT_SHA: ${{ github.sha }}
         run: |
           set -euxo pipefail
 
@@ -36,9 +37,16 @@ jobs:
           cat instructions.txt
           echo "--- End instructions.txt content ---"
 
+          # Construct assistant name using commit SHA and config file basename
+          CONFIG_BASENAME=$(basename "$CONFIG_FILE" .json)
+          ASSISTANT_NAME="commit_${COMMIT_SHA}_${CONFIG_BASENAME}"
+
+          echo "Constructed assistant name: $ASSISTANT_NAME"
+
           echo "--- Debug: Running jq for payload creation ---"
-          if ! jq --arg instr "$INSTRUCTIONS" '
+          if ! jq --arg instr "$INSTRUCTIONS" --arg name "$ASSISTANT_NAME" '
             del(.id, .object, .created_at, .updated_at) |
+            .name = $name |
             if .reasoning_effort == null then del(.reasoning_effort) else . end |
             if .description == null then .description = "" else . end |
             if .tool_resources and .tool_resources.code_interpreter and .tool_resources.code_interpreter.file_ids == [""] then
@@ -73,7 +81,7 @@ jobs:
           echo "Curl HTTP Response Code: $RESPONSE_HTTP_CODE"
           if [ "$RESPONSE_HTTP_CODE" -eq 200 ]; then
             ASSISTANT_ID_FINAL=$(jq -r '.id' response.json)
-            if [ -z "$ASSISTANT_ID_FINAL" ]; then
+            if [ -z "$ASSISTANT_ID_FINAL" ] || [ "$ASSISTANT_ID_FINAL" = "null" ]; then
                 echo "Error: Assistant ID could not be extracted from response.json. Response content:"
                 cat response.json
                 exit 1
@@ -140,26 +148,24 @@ jobs:
     name: Delete Temporary Assistant
     needs: run-tests
     runs-on: ubuntu-latest
-    if: always()
-
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      ASSISTANT_ID_TO_DELETE: ${{ needs.create-temp-assistant.outputs.assistant_id }}
     steps:
       - name: Debug Output Variable
         run: |
-          echo "Debug 1: Value from create-temp-assistant job outputs directly: '${{ needs.create-temp-assistant.outputs.assistant_id }}'"
-          echo "Debug 2: Value of ASSISTANT_ID_TO_DELETE environment variable: '$ASSISTANT_ID_TO_DELETE'"
-        env:
-          ASSISTANT_ID_TO_DELETE: ${{ needs.create-temp-assistant.outputs.assistant_id }}
+          echo "Debug: Value from create-temp-assistant job outputs directly: '${{ needs.create-temp-assistant.outputs.assistant_id }}'"
+          echo "Debug: Value of ASSISTANT_ID_TO_DELETE environment variable: '$ASSISTANT_ID_TO_DELETE'"
 
-      - name: Delete Temporary Assistant
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          ASSISTANT_ID_TO_DELETE: ${{ needs.create-temp-assistant.outputs.assistant_id }}
+      - name: Fail if assistant ID is empty (mandatory deletion)
         run: |
           if [ -z "$ASSISTANT_ID_TO_DELETE" ]; then
-            echo "Error: ASSISTANT_ID_TO_DELETE is empty. Skipping deletion as no ID was propagated."
-            exit 0
+            echo "Error: ASSISTANT_ID_TO_DELETE is empty. Cannot delete temporary assistant. Failing pipeline."
+            exit 1
           fi
 
+      - name: Delete Temporary Assistant
+        run: |
           echo "Attempting to delete temporary assistant with ID: $ASSISTANT_ID_TO_DELETE"
           DELETE_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
             -X DELETE \
@@ -176,7 +182,7 @@ jobs:
 
   deploy-prod:
     name: Deploy to Prod
-    needs: run-tests
+    needs: delete-temp-assistant
     if: success()
     runs-on: ubuntu-latest
     environment:
