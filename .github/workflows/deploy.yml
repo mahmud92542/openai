@@ -4,20 +4,20 @@ on:
   push:
     branches:
       - main
-      
+
 jobs:
   create-temp-assistant:
     name: Create Temporary Assistant for Testing
     runs-on: ubuntu-latest
     outputs:
-      assistant_id: ${{ steps.create-assistant.outputs.assistant_id }} # Output the created assistant ID
+      assistant_id: ${{ steps.set-assistant-output.outputs.assistant_id }} # Output from the new dedicated step
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Create Temporary Assistant
-        id: create-assistant # Give this step an ID to reference its outputs
+      - name: Create Temporary Assistant and Capture ID
+        id: create-assistant-process # Renamed this ID to reflect its role
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
@@ -78,23 +78,33 @@ jobs:
           
           echo "Curl HTTP Response Code: $RESPONSE_HTTP_CODE"
           if [ "$RESPONSE_HTTP_CODE" -eq 200 ]; then
-            ASSISTANT_ID=$(jq -r '.id' response.json)
-            # Debug: Check if ASSISTANT_ID is extracted
-            if [ -z "$ASSISTANT_ID" ]; then
+            ASSISTANT_ID_FINAL=$(jq -r '.id' response.json) # Use a distinct variable name
+            # Debug: Check if ASSISTANT_ID_FINAL is extracted
+            if [ -z "$ASSISTANT_ID_FINAL" ]; then
                 echo "Error: Assistant ID could not be extracted from response.json. Response content:"
                 cat response.json # Print the full response for inspection
                 exit 1 # Fail the step explicitly if ID is missing
             fi
-            echo "Temporary Assistant created successfully with ID: $ASSISTANT_ID"
-            echo "assistant_id=$ASSISTANT_ID" >> $GITHUB_OUTPUT # Set the output variable for the step
+            echo "Temporary Assistant created successfully with ID: $ASSISTANT_ID_FINAL"
             echo "--- Debug: Full OpenAI API success response ---"
             cat response.json
             echo "--- End OpenAI API response ---"
+            
+            # Export the ID so the next step can use it
+            echo "ASSISTANT_ID_FOR_OUTPUT=$ASSISTANT_ID_FINAL" >> $GITHUB_ENV 
+            echo "--- Debug: ASSISTANT_ID_FOR_OUTPUT exported to GITHUB_ENV ---"
+
           else
             echo "Failed to create temporary assistant: HTTP $RESPONSE_HTTP_CODE. Response content:"
             cat response.json
             exit 1
           fi
+
+      - name: Set Assistant ID as Job Output
+        id: set-assistant-output # This is the ID referenced in job.outputs
+        run: |
+          echo "assistant_id=${{ env.ASSISTANT_ID_FOR_OUTPUT }}" >> $GITHUB_OUTPUT
+          echo "--- Debug: Final assistant_id output to job: ${{ env.ASSISTANT_ID_FOR_OUTPUT }} ---"
 
   run-tests:
     name: Run Tests
