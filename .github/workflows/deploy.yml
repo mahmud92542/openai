@@ -87,7 +87,7 @@ jobs:
             fi
             echo "Temporary Assistant created successfully with ID: $ASSISTANT_ID_FINAL"
             
-            echo "assistant_id=$ASSISTANT_ID_FINAL" >> $GITHUB_OUTPUT 
+            echo "assistant_id=$ASSISTANT_ID_FINAL" >> $GITHUB_OUTPUT
             echo "$ASSISTANT_ID_FINAL" > assistant_id.txt # Save ID to a file
 
           else
@@ -107,10 +107,10 @@ jobs:
     name: Run Tests
     needs: create-temp-assistant
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' && success() # ONLY run on pull requests and if previous step succeeded
+    if: github.event_name == 'pull_request' && success()
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      DEV_ASSISTANT_ID: ${{ needs.create-temp-assistant.outputs.assistant_id }} 
+      DEV_ASSISTANT_ID: ${{ needs.create-temp-assistant.outputs.assistant_id }}
 
     steps:
       - name: Checkout code
@@ -123,18 +123,17 @@ jobs:
 
       - name: Create and activate venv, install deps, and run tests
         run: |
-          # The print statement in eval_script.py will confirm the ID being used
           python3 -m venv venv
           source venv/bin/activate
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pytest test_eval_script.py
+          pytest test_eval_script.py # This is the corrected line
 
   delete-temp-assistant:
     name: Delete Temporary Assistant
-    needs: run-tests
+    needs: run-tests # Depends on run-tests, but runs regardless of its success
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' && always() # ONLY run on pull requests, always attempt cleanup
+    if: github.event_name == 'pull_request' && always()
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -176,17 +175,38 @@ jobs:
             exit 1
           fi
 
+  # New job to close the PR on test failure
+  close-pr-on-failure:
+    name: Close Pull Request on Test Failure
+    needs: run-tests # This job needs run-tests to complete
+    runs-on: ubuntu-latest
+    # This job will ONLY run if:
+    # 1. It's a pull request event.
+    # 2. The 'run-tests' job failed.
+    if: github.event_name == 'pull_request' && failure()
+    steps:
+      - name: Close Pull Request
+        env:
+          GH_TOKEN: ${{ github.token }} # Automatically provided token with necessary permissions
+        run: |
+          PR_NUMBER=${{ github.event.pull_request.number }}
+          if [ -z "$PR_NUMBER" ]; then
+            echo "Could not get pull request number. Skipping PR closure."
+            exit 0
+          fi
+          echo "Closing pull request #$PR_NUMBER due to CI failure."
+          # Use GitHub CLI to close the pull request
+          # You can also add a comment if you like: -c "Closing due to failed CI checks."
+          gh pr close $PR_NUMBER --repo ${{ github.repository }} --comment "This pull request is being closed automatically because required CI checks failed. Please address the issues and open a new pull request."
+
   # Deployment Job: deploy-prod
   # This job will ONLY run on push events targeting 'main' (i.e., after a merge)
   deploy-prod:
     name: Deploy to Prod
-    # This job does not need any of the CI jobs to have run successfully on a 'push' event,
-    # as its trigger is independent.
-    # It will only run if it's a 'push' to main.
-    if: github.event_name == 'push' # ONLY run on push events
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     environment:
-      name: production # This links to your GitHub Environment for manual approvals
+      name: production
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
