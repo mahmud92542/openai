@@ -128,7 +128,7 @@ jobs:
           source venv/bin/activate
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          python eval_script.py
+          pytest test_eval_script.py
 
   delete-temp-assistant:
     name: Delete Temporary Assistant
