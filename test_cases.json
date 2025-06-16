@@ -8,7 +8,7 @@
     {
       "id": "TC-002",
       "input": "What is the capital of India?",
-      "expected_output": "New Dellhi",
+      "expected_output": "Dellhi",
       "comparison_method": "model_graded"
     }
   ]
