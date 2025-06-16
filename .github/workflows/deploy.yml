@@ -130,8 +130,6 @@ jobs:
           pip install -r requirements.txt
           python eval_script.py
 
-        continue-on-error: true # Important: Allows the cleanup job to run even if tests fail
-
   delete-temp-assistant:
     name: Delete Temporary Assistant
     needs: run-tests
