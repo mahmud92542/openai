@@ -9,7 +9,7 @@ on:
       - main # This will trigger the CI part (temp assistant, tests, cleanup)
 
 jobs:
-  # CI Jobs: create-temp-assistant, run-tests, delete-temp-assistant
+  # CI Jobs: create-temp-assistant, run-tests, close-pr-on-failure, delete-temp-assistant
   # These jobs will ONLY run on pull_request events targeting 'main'
   create-temp-assistant:
     name: Create Temporary Assistant for Testing
@@ -107,7 +107,7 @@ jobs:
     name: Run Tests
     needs: create-temp-assistant
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' && success()
+    if: github.event_name == 'pull_request' && success() # ONLY run on pull requests and if previous step succeeded
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       DEV_ASSISTANT_ID: ${{ needs.create-temp-assistant.outputs.assistant_id }}
@@ -127,13 +127,37 @@ jobs:
           source venv/bin/activate
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pytest test_eval_script.py # This is the corrected line
+          # Run pytest to execute your tests and ensure proper exit codes
+          pytest test_eval_script.py
+        # No 'continue-on-error: true' here
+
+  close-pr-on-failure:
+    name: Close Pull Request on Test Failure
+    runs-on: ubuntu-latest
+    # This job runs if 'run-tests' failed
+    needs: run-tests
+    if: github.event_name == 'pull_request' && failure() && github.event.pull_request.number
+    permissions:
+      pull-requests: write # Grant write permission to the GITHUB_TOKEN for closing PRs
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Close Pull Request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          echo "Tests failed. Attempting to close Pull Request #$PR_NUMBER."
+          # Use GitHub CLI to close the pull request
+          gh pr close $PR_NUMBER --comment "This Pull Request has been automatically closed because the CI tests failed to meet the required pass percentage (below 80%). Please fix the issues and open a new PR."
+          echo "Pull Request #$PR_NUMBER closed successfully."
 
   delete-temp-assistant:
     name: Delete Temporary Assistant
-    needs: run-tests # Depends on run-tests, but runs regardless of its success
+    needs: [run-tests, close-pr-on-failure] # Depend on both tests and closing PR, so it runs after them
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' && always()
+    if: github.event_name == 'pull_request' && always() # ONLY run on pull requests, always attempt cleanup
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -175,38 +199,17 @@ jobs:
             exit 1
           fi
 
-  # New job to close the PR on test failure
-  close-pr-on-failure:
-    name: Close Pull Request on Test Failure
-    needs: run-tests # This job needs run-tests to complete
-    runs-on: ubuntu-latest
-    # This job will ONLY run if:
-    # 1. It's a pull request event.
-    # 2. The 'run-tests' job failed.
-    if: github.event_name == 'pull_request' && failure()
-    steps:
-      - name: Close Pull Request
-        env:
-          GH_TOKEN: ${{ github.token }} # Automatically provided token with necessary permissions
-        run: |
-          PR_NUMBER=${{ github.event.pull_request.number }}
-          if [ -z "$PR_NUMBER" ]; then
-            echo "Could not get pull request number. Skipping PR closure."
-            exit 0
-          fi
-          echo "Closing pull request #$PR_NUMBER due to CI failure."
-          # Use GitHub CLI to close the pull request
-          # You can also add a comment if you like: -c "Closing due to failed CI checks."
-          gh pr close $PR_NUMBER --repo ${{ github.repository }} --comment "This pull request is being closed automatically because required CI checks failed. Please address the issues and open a new pull request."
-
   # Deployment Job: deploy-prod
   # This job will ONLY run on push events targeting 'main' (i.e., after a merge)
   deploy-prod:
     name: Deploy to Prod
-    if: github.event_name == 'push'
+    # This job does not need any of the CI jobs to have run successfully on a 'push' event,
+    # as its trigger is independent.
+    # It will only run if it's a 'push' to main.
+    if: github.event_name == 'push' # ONLY run on push events
     runs-on: ubuntu-latest
     environment:
-      name: production
+      name: production # This links to your GitHub Environment for manual approvals
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
